@@ -4,10 +4,9 @@ import os, torch
 import torch.nn as nn
 from typing import List, Tuple
 from data import Subtask1Dataset
-from utils import Tokenizer, WordTokenizer, GraphTokenizer, SpanTokenizer, Config, parallel
+from utils import Tokenizer, WordTokenizer, GraphTokenizer, SpanTokenizer, Config, parallel, to
 from torch.utils.data import DataLoader, Dataset
 from model import EmotionCausalModel
-from torch.nn.utils.rnn import pad_sequence
 
 class EmotionCausaAnalyzer:
     def __init__(
@@ -41,8 +40,24 @@ class EmotionCausaAnalyzer:
 
 
     def train_step(self, inputs: List[torch.Tensor], targets: List[torch.Tensor]) -> torch.Tensor:
-        words, speakers, emotions, graphs, spans = zip(*[*inputs, *targets])
+        r"""
+        Implements training step.
+        Args:
+            inputs (List[torch.Tensor]):
+                - words (torch.Tensor): ``[batch_size, max(conv_len), max(ut_len), fix_len]``
+                - speakers (torch.Tensor): ``[batch_size, max(conv_len)]``
+                - emotions (torch.Tensor): ``[batch_size, max(conv_len)]``
+            targets (List[torch.Tensor]): `
+                - graphs (torch.Tensor): ``[batch_size, max(conv_len), max(conv_len)]``
+                - spans (torch.Tensor): ``[batch_size, max(conv_len), max(conv_len), max(ut_len)]``
+        Returns:
+            ~torch.Tensor: Loss.
+        """
+        words, speakers, emotions, graphs, spans = to([*inputs, *targets], self.device)
+        ut_mask = (speakers != self.input_tkzs[1].pad_index)
 
+        s_ut, s_em, s_span = self.model(words, speakers, emotions, graphs)
+        loss = self.model.loss(s_ut, s_em, s_span, graphs, emotions, spans, ut_mask)
 
 
     @torch.no_grad()
@@ -116,7 +131,7 @@ if __name__ == '__main__':
     analyzer, (train, dev, test) = EmotionCausaAnalyzer.build(
         data='dataset/text/Subtask_1_train.json', pval=0.2, ptest=0.1, pretrained='bert-base-uncased'
     )
-    analyzer.train(train, dev, test)
+    analyzer.train(train, dev, test, batch_size=50)
 
 
 

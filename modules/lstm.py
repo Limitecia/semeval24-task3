@@ -12,10 +12,11 @@ class LSTM(nn.Module):
         num_layers: int = 1,
         bidirectional: bool = True,
         activation: nn.Module = nn.Identity(),
-        dropout: float = 0.0
+        dropout: float = 0.0,
     ):
         super().__init__()
-        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers,
+        self.bidirectional = bidirectional
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size//(2 if bidirectional else 1), num_layers=num_layers,
                             bidirectional=bidirectional, dropout=dropout, batch_first=True, bias=True)
         if output_size is None:
             self.ffn = activation

@@ -6,7 +6,7 @@ from concurrent.futures import ProcessPoolExecutor
 from typing import Iterable, Callable
 from tqdm import tqdm
 import numpy as np
-from utils.fns import flatten_list, split
+from utils.fns import flatten_list, multipad
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, PackedSequence
 
 
@@ -366,9 +366,9 @@ class GraphTokenizer(Tokenizer):
             ~ torch.Tensor: ``[batch_size, pad(seq_len), pad(seq_len)]``
         """
         lens = list(map(lambda x: x.shape[1], batch))
-        padded1 = pad_sequence(flatten_list(x.unbind(-1) for x in batch), batch_first=True, padding_value=self.pad_index).split(lens)
-        padded0 = pad_sequence(padded1, batch_first=True, padding_value=self.pad_index)
-        return padded0
+        padded1 = pad_sequence(flatten_list(x.unbind(-1) for x in batch), batch_first=True, padding_value=0).split(lens)
+        padded0 = pad_sequence(padded1, batch_first=True, padding_value=0)
+        return padded0.to(torch.bool)
 
     def fit(self, tokens: Iterable[str], show: bool = False):
         pass
@@ -411,18 +411,7 @@ class SpanTokenizer(Tokenizer):
         # pad utterance length
         max_ut_len = max(map(lambda b: b.shape[-1], batch))
         max_conv_len = max(map(lambda b: b.shape[0], batch))
-        padded = torch.stack([
-            torch.concat([torch.concat([
-                torch.concat([
-                    # concat dimension -1
-                    torch.concat([b, torch.zeros(b.shape[0], b.shape[1], max_ut_len - b.shape[2], dtype=torch.bool)], dim=-1),
-                    torch.zeros(b.shape[0], max_conv_len - b.shape[1], max_ut_len, dtype=torch.bool)
-                ], dim=1),
-            ]), torch.zeros(max_conv_len-b.shape[0], max_conv_len, max_ut_len)], dim=0)  for b in batch], dim=0)
-
-        # pad dimension 1
-        padded1 = pad_sequence()
-        return pad_sequence(batch, batch_first=True, padding_value=self.pad_index)
+        return multipad(batch, target_dims=(max_conv_len, max_conv_len, max_ut_len), pad_value=0, dtype=torch.bool)
 
 
 

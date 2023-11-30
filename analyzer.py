@@ -4,7 +4,7 @@ import os, torch
 import torch.nn as nn
 from typing import List, Tuple
 from data import Subtask1Dataset
-from utils import Tokenizer, PretrainedTokenizer, NullTokenizer, Config, parallel, TensorTokenizer
+from utils import Tokenizer, WordTokenizer, GraphTokenizer, SpanTokenizer, Config, parallel
 from torch.utils.data import DataLoader, Dataset
 from model import EmotionCausalModel
 from torch.nn.utils.rnn import pad_sequence
@@ -76,14 +76,14 @@ class EmotionCausaAnalyzer:
     ) -> Tuple[EmotionCausaAnalyzer, Tuple[Subtask1Dataset, Subtask1Dataset, Subtask1Dataset]]:
         # create tokenizers
         input_tkzs = [
-            PretrainedTokenizer('words', 'bert-base-uncased', lower=False, fix_len=5),
+            WordTokenizer('TEXT', 'bert-base-uncased', lower=False),
             Tokenizer('SPEAKER', lower=True, max_words=None)
         ]
 
         target_tkzs = [
             Tokenizer('EMOTION', lower=True, max_words=None),
-            TensorTokenizer('GRAPH'),
-            NullTokenizer('SPAN')
+            GraphTokenizer('GRAPH'),
+            SpanTokenizer('SPAN')
         ]
 
         # read dataset and split

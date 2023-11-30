@@ -29,3 +29,6 @@ class Utterance:
     @classmethod
     def from_dict(cls, data: dict) -> Utterance:
         return Utterance(data['utterance_ID'], data['text'], data['speaker'], data['emotion'])
+
+    def __len__(self):
+        return len(self.words)

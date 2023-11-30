@@ -6,9 +6,9 @@ from concurrent.futures import ProcessPoolExecutor
 from typing import Iterable, Callable
 from tqdm import tqdm
 import numpy as np
-from utils.fns import flatten_list
-from torch.nn.utils.rnn import pad_sequence
-from torch.nn.functional import pad
+from utils.fns import flatten_list, split
+from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, PackedSequence
+
 
 UNK_TOKEN = '<unk>'
 PAD_TOKEN = '<pad>'
@@ -58,7 +58,11 @@ class Tokenizer:
         return f'Tokenizer(field={self.field}, specials={self.specials}, vocab_size={len(self)})'
 
     def preprocess(self, token: str) -> str:
-        return self.fn(token.lower() if self.lower else token)
+        if self.lower:
+            token = token.lower()
+        if self.fn:
+            token = self.fn(token)
+        return token
 
     def _encode(self, token: str) -> int:
         """
@@ -103,7 +107,6 @@ class Tokenizer:
             except:
                 print(unpadded)
         return unpadded
-
 
     def decode(self, indices: Union[Iterable[int], torch.Tensor], remove_unk: bool = False):
         """
@@ -200,50 +203,50 @@ class Tokenizer:
         with open(path, 'wb') as writer:
             pickle.dump(self.__dict__, writer)
 
-    @classmethod
-    def load(cls, path: str) -> Tokenizer:
-        extension = path.split('.')[-1]
-        if extension == PretrainedTokenizer.EXTENSION:
-            return PretrainedTokenizer.load(path)
-        elif extension == StaticTokenizer.EXTENSION:
-            return StaticTokenizer.load(path)
-        elif extension == NullTokenizer.EXTENSION:
-            return NullTokenizer.load(path)
-        with open(path, 'rb') as reader:
-            data = pickle.load(reader)
-
-        tokenizer = cls(field=data['field'], max_words=data['max_words'], lower=data['lower'],
-                        pad_token=data['pad_token'], unk_token=data['unk_token'], bos_token=data['bos_token'], eos_token=data['eos_token'])
-        tokenizer.vocab = data['vocab']
-        tokenizer.inv_vocab = data['inv_vocab']
-        tokenizer.counter = data['counter']
-        tokenizer.specials = data['specials']
-        return tokenizer
+    # @classmethod
+    # def load(cls, path: str) -> Tokenizer:
+    #     extension = path.split('.')[-1]
+    #     if extension == PretrainedTokenizer.EXTENSION:
+    #         return PretrainedTokenizer.load(path)
+    #     elif extension == StaticTokenizer.EXTENSION:
+    #         return StaticTokenizer.load(path)
+    #     elif extension == NullTokenizer.EXTENSION:
+    #         return NullTokenizer.load(path)
+    #     with open(path, 'rb') as reader:
+    #         data = pickle.load(reader)
+    #
+    #     tokenizer = cls(field=data['field'], max_words=data['max_words'], lower=data['lower'],
+    #                     pad_token=data['pad_token'], unk_token=data['unk_token'], bos_token=data['bos_token'], eos_token=data['eos_token'])
+    #     tokenizer.vocab = data['vocab']
+    #     tokenizer.inv_vocab = data['inv_vocab']
+    #     tokenizer.counter = data['counter']
+    #     tokenizer.specials = data['specials']
+    #     return tokenizer
 
 
 
 
 class WordTokenizer(Tokenizer):
     EXTENSION = 'tkz-word'
-    TRAINABLE = True
+    TRAINABLE = False
 
     def __init__(
         self,
         field: str,
         name: str,
         lower: bool,
-        fix_len: int,
         bos: bool = False,
-        eos: bool = False
+        eos: bool = False,
+        fix_len: int = 5
     ):
         self.field = field
         self.name = name
         self.tokenizer = AutoTokenizer.from_pretrained(name, padding_side='right')
-        self.fix_len = fix_len
         self.lower = lower
-        self.counter = dict()
         self.bos = bos
         self.eos = eos
+        self.fn = None
+        self.fix_len = fix_len
 
         self.bos_token = self.tokenizer.bos_token or self.tokenizer.pad_token
         self.eos_token = self.tokenizer.eos_token or self.tokenizer.pad_token
@@ -267,40 +270,61 @@ class WordTokenizer(Tokenizer):
         return self.tokenizer.encode(self.unk_token).pop()
 
     def __repr__(self):
-        return f'PretrainedTokenizer(field={self.field}, name={self.name}, fix_len={self.fix_len})'
+        return f'WordTokenizer(field={self.field}, name={self.name}, bos={self.bos}, eos={self.eos})'
 
-
-    def encode(self, tokens: Iterable[str]) -> torch.Tensor:
-        tokens = list(tokens)
+    def preprocess(self, words: List[str]) -> List[str]:
+        if self.lower:
+            words = [word.lower() for word in words]
         if self.bos:
-            tokens = [self.bos_token] + tokens
+            words = [self.bos_token] + words
         if self.eos:
-            tokens += [self.eos_token]
-        tokens = list(map(self.preprocess, tokens))
-        ids = self.tokenizer(tokens, padding='max_length', truncation=True, add_special_tokens=False, max_length=self.fix_len, return_tensors='pt')['input_ids']
+            words.append(self.eos_token)
+        return words
+
+    def encode(self, texts: Iterable[str]) -> torch.Tensor:
+        r"""
+        Receives texts of a conversation and returns a PaddedSequence.
+        Args:
+            texts (Iterable[str]): ``[seq_len] ~ conv_len``.
+
+        Returns:
+            ~torch.Tensor: ``[conv_len, pad(seq_len), fix_len]``
+        :return:
+        """
+        words = [self.preprocess(text.split()) for text in texts]
+        lens = list(map(len, words))
+        tokens = self.tokenizer(flatten_list(words), padding='max_length', truncation=True, max_length=self.fix_len, add_special_tokens=False, return_tensors='pt')
+        ids = pad_sequence(tokens['input_ids'].split(lens), batch_first=True, padding_value=self.pad_index)
         return ids
 
-
+    def encode_batch(self, batch: List[Iterable[str]]) -> torch.Tensor:
+        r"""
+        Receives texts from a batch of conversations.
+        Args:
+            batch (List[Iterable[str]]): ``[[seq_len] ~ conv_len] ~ batch_size
+        Returns:
+            ~ torch.Tensor: ``[batch_size, pad(conv_len), pad(seq_len), fix_len]``
+        """
+        conv_lens = list(map(len, batch))
+        unpadded = self.encode(flatten_list(batch)).split(conv_lens, dim=0)
+        # pad sequence lengths
+        padded = pad_sequence(unpadded, batch_first=True, padding_value=self.pad_index)
+        return padded
 
     def __len__(self):
         return self.tokenizer.vocab_size
 
     def fit(self, tokens: Iterable[str], show: bool = True):
-        for token in tqdm(tokens, desc=f'{self.field} pretrained tokenizer counting', disable=not show):
-            token = self.preprocess(token)
-            try:
-                self.counter[token] += 1
-            except KeyError:
-                self.counter[token] = 1
+        pass
 
     def save(self, path: str):
-        objects = dict(field=self.field, name=self.name, fix_len=self.fix_len, lower=self.lower, counter=self.counter)
+        objects = dict(field=self.field, name=self.name, lower=self.lower, bos=self.bos, eos=self.eos)
         with open(path, 'wb') as writer:
             pickle.dump(objects, writer)
 
 
     @classmethod
-    def load(cls, path: str) -> PretrainedTokenizer:
+    def load(cls, path: str) -> WordTokenizer:
         with open(path, 'rb') as reader:
             data = pickle.load(reader)
 
@@ -308,6 +332,8 @@ class WordTokenizer(Tokenizer):
         tokenizer = cls(**data)
         tokenizer.counter = counter
         return tokenizer
+
+
 
 class GraphTokenizer(Tokenizer):
     r"""
@@ -317,6 +343,7 @@ class GraphTokenizer(Tokenizer):
     EXTENSION = 'tkz-null'
     TRAINABLE = False
     PAD = True
+
     def __init__(self, field: str):
         super().__init__(field, max_words=None, lower=False, pad_token=None, unk_token=None)
 
@@ -339,7 +366,7 @@ class GraphTokenizer(Tokenizer):
             ~ torch.Tensor: ``[batch_size, pad(seq_len), pad(seq_len)]``
         """
         lens = list(map(lambda x: x.shape[1], batch))
-        padded1 = pad_sequence(flatten_list(x.squeeze(-1) for x in batch), batch_first=True, padding_value=self.pad_index).split(lens)
+        padded1 = pad_sequence(flatten_list(x.unbind(-1) for x in batch), batch_first=True, padding_value=self.pad_index).split(lens)
         padded0 = pad_sequence(padded1, batch_first=True, padding_value=self.pad_index)
         return padded0
 
@@ -356,99 +383,52 @@ class GraphTokenizer(Tokenizer):
 class SpanTokenizer(Tokenizer):
     EXTENSION = 'tkz-sub'
     PAD = True
-    TRAINABLE = True
+    TRAINABLE = False
 
     def __init__(
         self,
         field: str,
         max_words: Optional[int] = None,
-        lower: bool = False,
-        pad_token: Optional[str] = PAD_TOKEN,
-        unk_token: Optional[str] = UNK_TOKEN,
-        bos_token: Optional[str] = None,
-        eos_token: Optional[str] = None
+        lower: bool = False
     ):
-        super().__init__(field, max_words, lower, pad_token, unk_token, bos_token, eos_token)
+        super().__init__(field, max_words, lower, pad_token=None, unk_token=None, bos_token=None, eos_token=None)
 
-    def encode_batch(self, tokens: Iterable[Iterable[str]]) -> torch.Tensor:
+    @property
+    def pad_index(self):
+        return -1
 
-    def encode(self, tokens: Iterable[Iterable[str]]) -> torch.Tensor:
-        return torch.tensor()
-
-
-class StaticTokenizer(Tokenizer):
-    EXTENSION = 'tkz-static'
-    TRAINABLE = False
-    PAD = True
-
-    def __init__(self, field: str, vocab: List[str], pad_token: str = PAD_TOKEN):
-        super().__init__(field, max_words=None, lower=False, pad_token=pad_token)
-        self.original = vocab
-        for word in vocab:
-            self.add(word)
-
-    def __repr__(self):
-        return f'StaticTokenizer(field={self.field}, specials={self.specials})'
-
-    def encode(self, tokens: List[str]) -> torch.Tensor:
-        return torch.tensor([self._encode(token) for token in tokens])
-
-    def fit(self, tokens: Iterable[str], show: bool = False):
-        pass
-
-    @classmethod
-    def load(cls, path: str) -> StaticTokenizer:
-        with open(path, 'rb') as reader:
-            data = pickle.load(reader)
-
-        return StaticTokenizer(field=data['field'], vocab=data['original'])
-
-class MatrixTokenizer(StaticTokenizer):
-    EXTENSION = 'tkz-mat'
-    TRAINABLE = False
-    PAD = False
-    def __init__(self, field: str, vocab: List[str], pad_token: str):
-        super().__init__(field, vocab, pad_token)
-
-    def __repr__(self):
-        return f'MatrixTokenizer(field={self.field}, pad_token={self.pad_token})'
-
-    def encode(self, tokens: np.array) -> torch.Tensor:
-        return torch.tensor([list(map(self.vocab.get, row)) for row in tokens.tolist()])
-
-
-
-class TensorTokenizer(NullTokenizer):
-    EXTENSION = 'tkz-tns'
-    TRAINABLE = False
-    PAD = True
-
-    def __init__(self, field: str):
-        super().__init__(field)
-
-    def __repr__(self):
-        return f'TensorTokenizer(field={self.field})'
-
-    def encode(self, tokens: torch.Tensor) -> torch.Tensor:
-        return tokens
+    def encode(self, spans: torch.Tensor) -> torch.Tensor:
+        return spans
 
     def encode_batch(self, batch: List[torch.Tensor]) -> torch.Tensor:
-        unpadded = [self.encode(token) for token in batch]
-        lens = list(map(lambda x: x.shape[1], unpadded))
-        padded1 = pad_sequence(flatten_list(unpadded), batch_first=True, padding_value=self.pad_index).split(lens, dim=0)
-        padded0 = pad_sequence(padded1, batch_first=True, padding_value=self.pad_index)
-        return padded0
+        r"""
+        Receives a batch of conversations and returns a padded 3D tensor of spans.
+        Args:
+            batch (List[torch.BoolTensor]): ``[[conv_len, conv_len, max(ut_len)] ~ batch_size``
+        Returns:
+            ~ torch.BoolTensor: ``[batch_size, max(conv_len), max(conv_len), max(ut_len)]``
+        """
+        # pad utterance length
+        max_ut_len = max(map(lambda b: b.shape[-1], batch))
+        max_conv_len = max(map(lambda b: b.shape[0], batch))
+        padded = torch.stack([
+            torch.concat([torch.concat([
+                torch.concat([
+                    # concat dimension -1
+                    torch.concat([b, torch.zeros(b.shape[0], b.shape[1], max_ut_len - b.shape[2], dtype=torch.bool)], dim=-1),
+                    torch.zeros(b.shape[0], max_conv_len - b.shape[1], max_ut_len, dtype=torch.bool)
+                ], dim=1),
+            ]), torch.zeros(max_conv_len-b.shape[0], max_conv_len, max_ut_len)], dim=0)  for b in batch], dim=0)
+
+        # pad dimension 1
+        padded1 = pad_sequence()
+        return pad_sequence(batch, batch_first=True, padding_value=self.pad_index)
+
 
 
 
 def fit(tokenizer: Tokenizer, data: List, show: bool) -> Tokenizer:
-    if isinstance(tokenizer, NullTokenizer):
-        return tokenizer
-    elif isinstance(tokenizer, MatrixTokenizer):
-        tokenizer.fit([getattr(item, tokenizer.field) for item in data], show)
-    else:
-        tokenizer.fit(flatten_list([getattr(item, tokenizer.field) for item in data]), show)
-
+    tokenizer.fit(flatten_list([getattr(item, tokenizer.field) for item in data]), show)
     return tokenizer
 
 def parallel(tokenizers: List[Tokenizer], data: list, num_workers: int = os.cpu_count(), show: bool = True):

@@ -3,7 +3,7 @@ from typing import List, Tuple
 from data.conversation import Conversation
 from torch.utils.data import Dataset
 import json, torch, os
-from utils import Tokenizer, parallel, PretrainedTokenizer, NullTokenizer, flatten_list
+from utils import flatten_list
 
 
 class Subtask1Dataset(Dataset):

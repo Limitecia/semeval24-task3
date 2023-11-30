@@ -35,3 +35,6 @@ def split(items: list, lens: List[int]):
     for l in lens:
         result.append([items.pop(0) for _ in range(l)])
     return result
+
+
+def multipad(input: torch.Tensor, target_dims: Tuple[int])

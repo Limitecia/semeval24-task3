@@ -3,10 +3,12 @@ from typing import Dict, Union, Iterable, Optional, Set, List
 import torch, pickle, os
 from transformers import AutoTokenizer
 from concurrent.futures import ProcessPoolExecutor
-from typing import Iterable
+from typing import Iterable, Callable
 from tqdm import tqdm
 import numpy as np
 from utils.fns import flatten_list
+from torch.nn.utils.rnn import pad_sequence
+from torch.nn.functional import pad
 
 UNK_TOKEN = '<unk>'
 PAD_TOKEN = '<pad>'
@@ -18,6 +20,7 @@ class Tokenizer:
     """
     EXTENSION = 'tkz'
     TRAINABLE = True
+    PAD = True
 
     def __init__(
         self,
@@ -27,7 +30,8 @@ class Tokenizer:
         pad_token: Optional[str] = PAD_TOKEN,
         unk_token: Optional[str] = UNK_TOKEN,
         bos_token: Optional[str] = None,
-        eos_token: Optional[str] = None
+        eos_token: Optional[str] = None,
+        fn: Optional[Callable] = None
     ):
         """
         Creates an instance of a Tokenizer.
@@ -38,6 +42,7 @@ class Tokenizer:
         self.field = field
         self.lower = lower
         self.max_words = max_words
+        self.fn = fn
 
         # initialize variables
         self.pad_token = pad_token
@@ -52,11 +57,8 @@ class Tokenizer:
     def __repr__(self):
         return f'Tokenizer(field={self.field}, specials={self.specials}, vocab_size={len(self)})'
 
-    def preprocess(self, token: str):
-        """
-        Preprocess new input token.
-        """
-        return token.lower() if self.lower else token
+    def preprocess(self, token: str) -> str:
+        return self.fn(token.lower() if self.lower else token)
 
     def _encode(self, token: str) -> int:
         """
@@ -92,6 +94,16 @@ class Tokenizer:
         if self.eos_token:
             indices.append(self.eos_index)
         return torch.tensor(indices)
+
+    def encode_batch(self, batch: List[Iterable[str]]) -> Union[torch.Tensor, List[torch.Tensor]]:
+        unpadded = [self.encode(tokens) for tokens in batch]
+        if self.PAD:
+            try:
+                return pad_sequence(unpadded, batch_first=True, padding_value=self.pad_index)
+            except:
+                print(unpadded)
+        return unpadded
+
 
     def decode(self, indices: Union[Iterable[int], torch.Tensor], remove_unk: bool = False):
         """
@@ -211,9 +223,10 @@ class Tokenizer:
 
 
 
-class PretrainedTokenizer(Tokenizer):
-    EXTENSION = 'tkz-pre'
+class WordTokenizer(Tokenizer):
+    EXTENSION = 'tkz-word'
     TRAINABLE = True
+
     def __init__(
         self,
         field: str,
@@ -234,20 +247,28 @@ class PretrainedTokenizer(Tokenizer):
 
         self.bos_token = self.tokenizer.bos_token or self.tokenizer.pad_token
         self.eos_token = self.tokenizer.eos_token or self.tokenizer.pad_token
+        self.pad_token = self.tokenizer.pad_token or self.tokenizer.eos_token
+        self.unk_token = self.tokenizer.unk_token
+
+    @property
+    def pad_index(self):
+        return self.tokenizer.encode(self.pad_token).pop()
+
+    @property
+    def bos_index(self):
+        return self.tokenizer.encode(self.bos_token).pop()
+
+    @property
+    def eos_index(self):
+        return self.tokenizer.encode(self.eos_token).pop()
+
+    @property
+    def unk_index(self):
+        return self.tokenizer.encode(self.unk_token).pop()
 
     def __repr__(self):
         return f'PretrainedTokenizer(field={self.field}, name={self.name}, fix_len={self.fix_len})'
 
-    @property
-    def pad_index(self):
-        if self.tokenizer.pad_token_id is not None:
-            return self.tokenizer.pad_token_id
-        else:
-            return self.tokenizer.eos_token_id
-
-    @property
-    def bos_index(self):
-        return self.tokenizer.bos_token_id
 
     def encode(self, tokens: Iterable[str]) -> torch.Tensor:
         tokens = list(tokens)
@@ -258,6 +279,8 @@ class PretrainedTokenizer(Tokenizer):
         tokens = list(map(self.preprocess, tokens))
         ids = self.tokenizer(tokens, padding='max_length', truncation=True, add_special_tokens=False, max_length=self.fix_len, return_tensors='pt')['input_ids']
         return ids
+
+
 
     def __len__(self):
         return self.tokenizer.vocab_size
@@ -286,37 +309,77 @@ class PretrainedTokenizer(Tokenizer):
         tokenizer.counter = counter
         return tokenizer
 
-class NullTokenizer(Tokenizer):
+class GraphTokenizer(Tokenizer):
+    r"""
+    Implementation of a graph tokenizer. It does not store a vocabulary, but streams a graph per instance.
+    """
+
     EXTENSION = 'tkz-null'
     TRAINABLE = False
+    PAD = True
     def __init__(self, field: str):
         super().__init__(field, max_words=None, lower=False, pad_token=None, unk_token=None)
 
     def __repr__(self):
-        return f'NullTokenizer(field={self.field})'
+        return f'GraphTokenizer(field={self.field})'
 
     @property
     def pad_index(self):
         return -1
 
-    def encode(self, tokens: Iterable[int]) -> torch.Tensor:
-        return torch.tensor(tokens)
+    def encode(self, graph: torch.Tensor) -> torch.Tensor:
+        return graph
+
+    def encode_batch(self, batch: List[torch.Tensor]) -> torch.Tensor:
+        r"""
+        Batch padding.
+        Args:
+            batch (List[torch.Tensor]): ``[seq_len, seq_len] ~ batch_size``
+        Returns:
+            ~ torch.Tensor: ``[batch_size, pad(seq_len), pad(seq_len)]``
+        """
+        lens = list(map(lambda x: x.shape[1], batch))
+        padded1 = pad_sequence(flatten_list(x.squeeze(-1) for x in batch), batch_first=True, padding_value=self.pad_index).split(lens)
+        padded0 = pad_sequence(padded1, batch_first=True, padding_value=self.pad_index)
+        return padded0
 
     def fit(self, tokens: Iterable[str], show: bool = False):
         pass
 
     @classmethod
-    def load(cls, path: str) -> NullTokenizer:
+    def load(cls, path: str) -> GraphTokenizer:
         with open(path, 'rb') as reader:
             data = pickle.load(reader)
-        return NullTokenizer(field=data['field'])
+        return GraphTokenizer(field=data['field'])
 
 
+class SpanTokenizer(Tokenizer):
+    EXTENSION = 'tkz-sub'
+    PAD = True
+    TRAINABLE = True
+
+    def __init__(
+        self,
+        field: str,
+        max_words: Optional[int] = None,
+        lower: bool = False,
+        pad_token: Optional[str] = PAD_TOKEN,
+        unk_token: Optional[str] = UNK_TOKEN,
+        bos_token: Optional[str] = None,
+        eos_token: Optional[str] = None
+    ):
+        super().__init__(field, max_words, lower, pad_token, unk_token, bos_token, eos_token)
+
+    def encode_batch(self, tokens: Iterable[Iterable[str]]) -> torch.Tensor:
+
+    def encode(self, tokens: Iterable[Iterable[str]]) -> torch.Tensor:
+        return torch.tensor()
 
 
 class StaticTokenizer(Tokenizer):
     EXTENSION = 'tkz-static'
     TRAINABLE = False
+    PAD = True
 
     def __init__(self, field: str, vocab: List[str], pad_token: str = PAD_TOKEN):
         super().__init__(field, max_words=None, lower=False, pad_token=pad_token)
@@ -343,6 +406,7 @@ class StaticTokenizer(Tokenizer):
 class MatrixTokenizer(StaticTokenizer):
     EXTENSION = 'tkz-mat'
     TRAINABLE = False
+    PAD = False
     def __init__(self, field: str, vocab: List[str], pad_token: str):
         super().__init__(field, vocab, pad_token)
 
@@ -354,6 +418,26 @@ class MatrixTokenizer(StaticTokenizer):
 
 
 
+class TensorTokenizer(NullTokenizer):
+    EXTENSION = 'tkz-tns'
+    TRAINABLE = False
+    PAD = True
+
+    def __init__(self, field: str):
+        super().__init__(field)
+
+    def __repr__(self):
+        return f'TensorTokenizer(field={self.field})'
+
+    def encode(self, tokens: torch.Tensor) -> torch.Tensor:
+        return tokens
+
+    def encode_batch(self, batch: List[torch.Tensor]) -> torch.Tensor:
+        unpadded = [self.encode(token) for token in batch]
+        lens = list(map(lambda x: x.shape[1], unpadded))
+        padded1 = pad_sequence(flatten_list(unpadded), batch_first=True, padding_value=self.pad_index).split(lens, dim=0)
+        padded0 = pad_sequence(padded1, batch_first=True, padding_value=self.pad_index)
+        return padded0
 
 
 

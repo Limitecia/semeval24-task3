@@ -17,18 +17,15 @@ class Conversation:
         self.utterances = utterances
         self.pairs = pairs
         self.GRAPH = None
-        self.EMOTIONS = None
         self.SPAN = None
         self.build()
 
 
     def build(self):
-        self.GRAPH = torch.zeros(len(self.utterances), len(self.utterances))
-        self.EMOTIONS = []
+        self.GRAPH = torch.zeros(len(self), len(self))
         self.SPAN = []
         for pair in self.pairs:
             self.GRAPH[pair.EFFECT.ID - 1, pair.CAUSE.ID - 1] = 1
-            self.EMOTIONS.append(pair.EMOTION)
             self.SPAN.append(pair.SPAN)
         for field in Utterance.FIELDS:
             self.__setattr__(field, [getattr(ut, field) for ut in self.utterances])
@@ -47,3 +44,9 @@ class Conversation:
         pairs = [CauseRelation(CAUSE=utterances[int(c) - 1], EFFECT=utterances[int(e) - 1], SPAN=span) for e, _, c, span in pairs]
         return Conversation(id, utterances, pairs)
 
+    def __len__(self):
+        return len(self.utterances)
+
+    @property
+    def span_lens(self) -> List[int]:
+        return [pair.span_len for pair in self.pairs]

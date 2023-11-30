@@ -6,7 +6,7 @@ from typing import Callable, Optional
 
 import torch
 import torch.nn as nn
-from supar.modules.mlp import MLP
+from modules.mlp import MLP
 
 
 class Biaffine(nn.Module):

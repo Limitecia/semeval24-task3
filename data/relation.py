@@ -12,6 +12,10 @@ class CauseRelation:
             SPAN = CAUSE.get_mask(SPAN)
         self.SPAN = SPAN
 
+    @property
+    def span_len(self):
+        return sum(self.SPAN)
+
 
     def __repr__(self):
         return (f'CauseRelation(\n'

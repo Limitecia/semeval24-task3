@@ -3,8 +3,10 @@ from data.relation import CauseRelation
 from data.utterance import Utterance
 from typing import List, Dict
 import torch
+import numpy as np
 
 class Conversation:
+    NO_CAUSE = '_'
     SEP = '_'
 
     def __init__(
@@ -22,10 +24,10 @@ class Conversation:
 
 
     def build(self):
-        self.GRAPH = torch.zeros(len(self), len(self))
+        self.GRAPH = np.repeat(Conversation.NO_CAUSE, len(self)**2).reshape(len(self), len(self)).astype(np.object_)
         self.SPAN = torch.zeros(len(self), len(self), max(map(len, self.utterances)))
         for pair in self.pairs:
-            self.GRAPH[pair.EFFECT.ID - 1, pair.CAUSE.ID - 1] = 1
+            self.GRAPH[pair.EFFECT.ID - 1, pair.CAUSE.ID - 1] = pair.EMOTION
             self.SPAN[pair.EFFECT.ID - 1, pair.CAUSE.ID -1][:len(pair.SPAN)] = torch.tensor(pair.SPAN)
         self.SPAN = self.SPAN.to(torch.bool)
         for field in Utterance.FIELDS:

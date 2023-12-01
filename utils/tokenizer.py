@@ -344,18 +344,16 @@ class GraphTokenizer(Tokenizer):
     TRAINABLE = False
     PAD = True
 
-    def __init__(self, field: str):
-        super().__init__(field, max_words=None, lower=False, pad_token=None, unk_token=None)
+    def __init__(self, field: str, vocab: Set[str], pad_token: str):
+        super().__init__(field, max_words=None, lower=False, pad_token=pad_token, unk_token=None)
+        for word in vocab:
+            self.add(word)
 
     def __repr__(self):
         return f'GraphTokenizer(field={self.field})'
 
-    @property
-    def pad_index(self):
-        return -1
-
-    def encode(self, graph: torch.Tensor) -> torch.Tensor:
-        return graph
+    def encode(self, graph: np.array) -> torch.Tensor:
+        return torch.tensor([[self.vocab[t] for t in row] for row in graph.tolist()])
 
     def encode_batch(self, batch: List[torch.Tensor]) -> torch.Tensor:
         r"""
@@ -366,9 +364,9 @@ class GraphTokenizer(Tokenizer):
             ~ torch.Tensor: ``[batch_size, pad(seq_len), pad(seq_len)]``
         """
         lens = list(map(lambda x: x.shape[1], batch))
-        padded1 = pad_sequence(flatten_list(x.unbind(-1) for x in batch), batch_first=True, padding_value=0).split(lens)
-        padded0 = pad_sequence(padded1, batch_first=True, padding_value=0)
-        return padded0.to(torch.bool)
+        padded1 = pad_sequence(flatten_list(self.encode(x).unbind(-1) for x in batch), batch_first=True, padding_value=self.pad_index).split(lens)
+        padded0 = pad_sequence(padded1, batch_first=True, padding_value=self.pad_index)
+        return padded0.to(torch.int32)
 
     def fit(self, tokens: Iterable[str], show: bool = False):
         pass

@@ -4,6 +4,7 @@ from typing import List, Union
 import numpy as np
 
 class CauseRelation:
+
     def __init__(self, CAUSE: Utterance, EFFECT: Utterance,  SPAN: Union[np.array, str]):
         self.CAUSE = CAUSE
         self.EFFECT = EFFECT

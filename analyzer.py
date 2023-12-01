@@ -51,6 +51,7 @@ class EmotionCausaAnalyzer:
                 print(f'\nEpoch {epoch} [train]: loss={round(train_loss, 2)}')
                 print(f'Epoch {epoch} [dev]: {repr(dev_metric)}')
                 print(f'Epoch {epoch} [test]: {repr(test_metric)}')
+            del train_loss, dev_metric, test_metric
 
 
     def forward(self, epoch: int, loader: DataLoader, show: bool = True, optimize: bool = True) -> Union[float, Subtask1Metric]:
@@ -68,11 +69,12 @@ class EmotionCausaAnalyzer:
                     loss = loss.item()
                     global_loss += loss
                 else:
-                    metric += self.eval_step(inputs, targets, gold=(epoch < 4))
+                    metric += self.eval_step(inputs, targets)
                     loss = metric.loss
                 bar.update(1)
                 bar.set_postfix({'loss': round(loss, 2)})
-                del loss
+                del loss, inputs, targets
+                torch.cuda.empty_cache()
             bar.close()
         return global_loss / len(loader) if optimize else metric
 
@@ -91,22 +93,28 @@ class EmotionCausaAnalyzer:
             ~torch.Tensor: Loss.
         """
         words, speakers, emotions, graphs, spans = to([*inputs, *targets], self.device)
-        ut_mask = (speakers != self.input_tkzs[1].pad_index)
+        pad_mask = (speakers != self.input_tkzs[1].pad_index)
 
-        s_em, s_span = self.model(words, speakers, emotions, graphs)
-        loss = self.model.loss(s_em, s_span, graphs, spans, ut_mask)
+        s_ut, s_em, s_span = self.model(words, speakers, emotions, graphs, spans)
+        loss = self.model.loss(s_ut, s_em, s_span, graphs, spans, emotions, pad_mask)
         return loss
 
     @torch.no_grad()
-    def eval_step(self, inputs: List[torch.Tensor], targets: List[torch.Tensor], gold: bool):
+    def eval_step(self, inputs: List[torch.Tensor], targets: List[torch.Tensor]):
         words, speakers, emotions, graphs, spans = to([*inputs, *targets], self.device)
-        ut_mask = (speakers != self.input_tkzs[1].pad_index)
-        s_em, s_span = self.model(words, speakers, emotions, graphs)
-        loss = self.model.loss(s_em, s_span, graphs, spans, ut_mask)
+        pad_mask = (speakers != self.input_tkzs[1].pad_index)
+        s_ut, s_em, s_span = self.model(words, speakers, emotions, graphs, spans)
+        loss = self.model.loss(s_ut, s_em, s_span, graphs, spans, emotions, pad_mask)
 
-        em_preds, span_preds = self.model.predict(words, speakers, graphs, spans)
+        em_preds, span_preds = self.model.predict(words, speakers, pad_mask)
 
-
+        b, effect, cause = graphs.nonzero(as_tuple=True)
+        ems = torch.zeros_like(graphs, dtype=torch.int32)
+        ems[graphs] = emotions[b, cause]
+        # metric = Subtask1Metric(loss, em_preds, span_preds, ems, spans, pad_mask, self.model.em_pad_index)
+        metric = Subtask1Metric(loss, em_preds, span_preds, ems, spans, pad_mask, self.model.em_pad_index)
+        del words, speakers, emotions, graphs, spans, pad_mask, s_ut, s_em, em_preds, span_preds, ems
+        return metric
 
 
     def transform(self, batch: Tuple[List[torch.Tensor], List[torch.Tensor]]) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
@@ -127,18 +135,18 @@ class EmotionCausaAnalyzer:
         word_embed_size: int = 200,
         spk_embed_size: int = 20,
         em_embed_size: int = 20,
-        pos_embed_size: int = 20,
         ut_embed_size: int = 200
     ) -> Tuple[EmotionCausaAnalyzer, Tuple[Subtask1Dataset, Subtask1Dataset, Subtask1Dataset]]:
         # create tokenizers
         input_tkzs = [
             WordTokenizer('TEXT', 'bert-base-uncased', lower=False),
             Tokenizer('SPEAKER', lower=True, max_words=None),
-            Tokenizer('EMOTION', lower=True, max_words=None, pad_token=Conversation.NO_CAUSE)
+            Tokenizer('EMOTION', lower=True, max_words=None)
         ]
 
         target_tkzs = [
-            GraphTokenizer('GRAPH', vocab=set(), pad_token=Conversation.NO_CAUSE),
+            # GraphTokenizer('GRAPH', vocab=set(), pad_token=Conversation.NO_CAUSE),
+            GraphTokenizer('GRAPH'),
             SpanTokenizer('SPAN')
         ]
 
@@ -152,11 +160,10 @@ class EmotionCausaAnalyzer:
             if tkz.TRAINABLE:
                 tkz.fit(flatten_list([getattr(conv, tkz.field) for conv in train.conversations]))
 
-        target_tkzs[0] = GraphTokenizer('GRAPH', vocab=input_tkzs[-1].tokens, pad_token=Conversation.NO_CAUSE)
+        # target_tkzs[0] = GraphTokenizer('GRAPH', vocab=input_tkzs[-1].tokens, pad_token=Conversation.NO_CAUSE)
 
         # construct model
         args = Config(
-            pos_embed_size=pos_embed_size, max_len=data.max_len, avg_span_len=int(train.avg_span_len),
             pretrained=pretrained, ut_embed_size=ut_embed_size
         )
         args.word_config = Config(embed_size=word_embed_size, pad_index=input_tkzs[0].pad_index)
@@ -174,7 +181,7 @@ if __name__ == '__main__':
     analyzer, (train, dev, test) = EmotionCausaAnalyzer.build(
         data='dataset/text/Subtask_1_train.json', pval=0.2, ptest=0.1, pretrained='bert-base-uncased'
     )
-    analyzer.train(train, dev, test, batch_size=10)
+    analyzer.train(train, dev, test, batch_size=10, lr=5e-3)
 
 
 

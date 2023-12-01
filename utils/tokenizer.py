@@ -97,7 +97,7 @@ class Tokenizer:
             indices = [self.bos_index] + indices
         if self.eos_token:
             indices.append(self.eos_index)
-        return torch.tensor(indices)
+        return torch.tensor(indices, dtype=torch.int32)
 
     def encode_batch(self, batch: List[Iterable[str]]) -> Union[torch.Tensor, List[torch.Tensor]]:
         unpadded = [self.encode(tokens) for tokens in batch]
@@ -335,12 +335,12 @@ class WordTokenizer(Tokenizer):
 
 
 
-class GraphTokenizer(Tokenizer):
+class LabeledGraphTokenizer(Tokenizer):
     r"""
     Implementation of a graph tokenizer. It does not store a vocabulary, but streams a graph per instance.
     """
 
-    EXTENSION = 'tkz-null'
+    EXTENSION = 'tkz-lgraph'
     TRAINABLE = False
     PAD = True
 
@@ -376,6 +376,53 @@ class GraphTokenizer(Tokenizer):
         with open(path, 'rb') as reader:
             data = pickle.load(reader)
         return GraphTokenizer(field=data['field'])
+
+
+
+class GraphTokenizer(LabeledGraphTokenizer):
+    r"""
+    Implementation of a graph tokenizer. It does not store a vocabulary, but streams a graph per instance.
+    """
+
+    EXTENSION = 'tkz-graph'
+    TRAINABLE = False
+    PAD = True
+
+    def __init__(self, field: str):
+        super().__init__(field, vocab=set(), pad_token=None)
+
+    def __repr__(self):
+        return f'GraphTokenizer(field={self.field})'
+
+    @property
+    def pad_index(self):
+        return 0
+
+    def encode(self, graph: torch.Tensor) -> torch.Tensor:
+        return graph
+
+    def encode_batch(self, batch: List[torch.Tensor]) -> torch.Tensor:
+        r"""
+        Batch padding.
+        Args:
+            batch (List[torch.Tensor]): ``[seq_len, seq_len] ~ batch_size``
+        Returns:
+            ~ torch.Tensor: ``[batch_size, pad(seq_len), pad(seq_len)]``
+        """
+        lens = list(map(lambda x: x.shape[1], batch))
+        padded1 = pad_sequence(flatten_list(self.encode(x).unbind(0) for x in batch), batch_first=True, padding_value=self.pad_index).split(lens)
+        padded0 = pad_sequence(padded1, batch_first=True, padding_value=self.pad_index)
+        return padded0.to(torch.bool)
+
+    def fit(self, tokens: Iterable[str], show: bool = False):
+        pass
+
+    @classmethod
+    def load(cls, path: str) -> GraphTokenizer:
+        with open(path, 'rb') as reader:
+            data = pickle.load(reader)
+        return GraphTokenizer(field=data['field'])
+
 
 
 class SpanTokenizer(Tokenizer):

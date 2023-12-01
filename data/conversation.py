@@ -24,10 +24,11 @@ class Conversation:
 
 
     def build(self):
-        self.GRAPH = np.repeat(Conversation.NO_CAUSE, len(self)**2).reshape(len(self), len(self)).astype(np.object_)
+        # self.GRAPH = np.repeat(Conversation.NO_CAUSE, len(self)**2).reshape(len(self), len(self)).astype(np.object_)
+        self.GRAPH = torch.zeros(len(self), len(self), dtype=torch.bool)
         self.SPAN = torch.zeros(len(self), len(self), max(map(len, self.utterances)))
         for pair in self.pairs:
-            self.GRAPH[pair.EFFECT.ID - 1, pair.CAUSE.ID - 1] = pair.EMOTION
+            self.GRAPH[pair.EFFECT.ID - 1, pair.CAUSE.ID - 1] = True
             self.SPAN[pair.EFFECT.ID - 1, pair.CAUSE.ID -1][:len(pair.SPAN)] = torch.tensor(pair.SPAN)
         self.SPAN = self.SPAN.to(torch.bool)
         for field in Utterance.FIELDS:

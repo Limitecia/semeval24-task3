@@ -4,7 +4,7 @@ import torch
 from modules import PretrainedEmbedding, LSTM, Biaffine, FFN
 from torch.nn.utils.rnn import PackedSequence, pad_sequence
 from utils import Config
-from typing import Tuple
+from typing import Tuple, Optional
 
 class EmotionCausalModel(nn.Module):
     def __init__(
@@ -108,15 +108,21 @@ class EmotionCausalModel(nn.Module):
             ut_mask (torch.Tensor): ``[batch_size, max(conv_len)]``
         """
         i, effect, cause = (graphs != self.em_pad_index).nonzero(as_tuple=True)
-        s_em, ems = s_em[ut_mask], graphs[ut_mask].to(torch.LongTensor)
+        s_em, ems = s_em[ut_mask], graphs[ut_mask]
         spans = spans[i, effect, cause]
 
-        em_loss = self.criterion(s_em.flatten(0,1), ems.flatten())
-        span_loss = self.criterion(s_span, spans.to(torch.LongTensor))
+        em_loss = self.criterion(s_em.flatten(0,1), ems.flatten().to(torch.long))
+        span_loss = self.criterion(s_span, spans.to(torch.float32))
 
         return em_loss + span_loss
 
-    def predict(self, words: torch.Tensor, speakers: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def predict(
+        self,
+        words: torch.Tensor,
+        speakers: torch.Tensor,
+        graphs: Optional[torch.Tensor] = None,
+        spans: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         batch_size, max_conv_len, max_ut_len = words.shape[0], words.shape[1], words.shape[2]
         word_embed = torch.stack([self.word_embed(words[i]) for i in range(batch_size)], dim=0)
         spk_embed = self.spk_embed(speakers)
@@ -124,17 +130,18 @@ class EmotionCausalModel(nn.Module):
         ut_embed = torch.stack([torch.concat(self.ut_embed(word_embed[i])[1][0].unbind(0), dim=-1) for i in range(batch_size)], dim=0)
         ut_embed = torch.concat([ut_embed, spk_embed], dim=-1)
 
-        em_cause = self.em_cause(ut_embed)
-        em_effect = self.em_effect(ut_embed)
+        em_cause = self.ut_cause(ut_embed)
+        em_effect = self.ut_effect(ut_embed)
 
         s_em = self.em_attn(em_cause, em_effect).argmax(1)
-        arc_mask = s_em != self.em
-        s_em[~arc_mask] = self.em_pad_index
+        cause_mask = (s_em != self.em_pad_index) if graphs is None else (graphs != self.em_pad_index)
 
         # compute spans
-        i, effect, cause = arc_mask.nonzero(as_tuple=True)
+        i, effect, cause = cause_mask.nonzero(as_tuple=True)
         word_embed = word_embed[i, cause]
-        em_embed = self.em_embed(s_em)
+        em_embed = self.em_embed(s_em[i, effect, cause])
+
+
 
 
 

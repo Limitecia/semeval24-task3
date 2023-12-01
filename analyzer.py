@@ -32,7 +32,7 @@ class EmotionCausaAnalyzer:
         dev: Subtask1Dataset,
         test: Subtask1Dataset,
         optimizer: Callable = Adam,
-        lr: float = 1e-3,
+        lr: float = 1e-4,
         epochs: int = 100,
         batch_size: int = 100,
         show: bool = True
@@ -47,7 +47,6 @@ class EmotionCausaAnalyzer:
             train_loss = self.forward(epoch, train_dl, optimize=True)
             dev_metric = self.forward(epoch, dev_dl, optimize=False)
             test_metric = self.forward(epoch, test_dl, optimize=False)
-
             if show:
                 print(f'\nEpoch {epoch} [train]: loss={round(train_loss, 2)}')
                 print(f'Epoch {epoch} [dev]: {repr(dev_metric)}')
@@ -69,7 +68,7 @@ class EmotionCausaAnalyzer:
                     loss = loss.item()
                     global_loss += loss
                 else:
-                    metric += self.eval_step(inputs, targets)
+                    metric += self.eval_step(inputs, targets, gold=(epoch < 4))
                     loss = metric.loss
                 bar.update(1)
                 bar.set_postfix({'loss': round(loss, 2)})
@@ -99,13 +98,13 @@ class EmotionCausaAnalyzer:
         return loss
 
     @torch.no_grad()
-    def eval_step(self, inputs: List[torch.Tensor], targets: List[torch.Tensor]):
+    def eval_step(self, inputs: List[torch.Tensor], targets: List[torch.Tensor], gold: bool):
         words, speakers, emotions, graphs, spans = to([*inputs, *targets], self.device)
         ut_mask = (speakers != self.input_tkzs[1].pad_index)
-        s_ut, s_em, s_span = self.model(words, speakers, emotions, graphs)
-        loss = self.model.loss(s_ut, s_em, s_span, graphs, emotions, spans, ut_mask)
+        s_em, s_span = self.model(words, speakers, emotions, graphs)
+        loss = self.model.loss(s_em, s_span, graphs, spans, ut_mask)
 
-        em_preds, span_preds = self.model.predict(words, speakers)
+        em_preds, span_preds = self.model.predict(words, speakers, graphs, spans)
 
 
 

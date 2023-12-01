@@ -74,7 +74,7 @@ class Subtask1Metric:
 
     @property
     def loss(self):
-        return self._loss/self.n
+        return self._loss/self.count
 
     @property
     def pfs(self):

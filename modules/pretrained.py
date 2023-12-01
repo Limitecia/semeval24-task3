@@ -10,7 +10,7 @@ class PretrainedEmbedding(nn.Module):
         super().__init__()
         self.word_embed = AutoModel.from_pretrained(pretrained).requires_grad_(finetune)
         self.pad_index = pad_index
-        self.ffn = FFN(in_features=self.word_embed.config.hidden_size, out_features=embed_size, activation=nn.LeakyReLU())
+        self.ffn = FFN(in_features=self.word_embed.config.hidden_size, out_features=embed_size, activation=nn.LeakyReLU(0.1))
         self.max_len = self.word_embed.config.max_position_embeddings
 
     def forward(self, words: torch.Tensor) -> torch.Tensor:

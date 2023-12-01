@@ -135,7 +135,8 @@ class EmotionCausaAnalyzer:
         word_embed_size: int = 200,
         spk_embed_size: int = 20,
         em_embed_size: int = 20,
-        ut_embed_size: int = 200
+        ut_embed_size: int = 200,
+        **kwargs
     ) -> Tuple[EmotionCausaAnalyzer, Tuple[Subtask1Dataset, Subtask1Dataset, Subtask1Dataset]]:
         # create tokenizers
         input_tkzs = [
@@ -164,7 +165,7 @@ class EmotionCausaAnalyzer:
 
         # construct model
         args = Config(
-            pretrained=pretrained, ut_embed_size=ut_embed_size
+            pretrained=pretrained, ut_embed_size=ut_embed_size, **kwargs
         )
         args.word_config = Config(embed_size=word_embed_size, pad_index=input_tkzs[0].pad_index)
         args.spk_config = Config(vocab_size=len(input_tkzs[1]), embed_size=spk_embed_size, pad_index=input_tkzs[1].pad_index)
@@ -179,7 +180,7 @@ class EmotionCausaAnalyzer:
 
 if __name__ == '__main__':
     analyzer, (train, dev, test) = EmotionCausaAnalyzer.build(
-        data='dataset/text/Subtask_1_train.json', pval=0.2, ptest=0.1, pretrained='bert-base-uncased'
+        data='dataset/text/Subtask_1_train.json', pval=0.2, ptest=0.1, pretrained='bert-base-uncased', finetune=True
     )
     analyzer.train(train, dev, test, batch_size=10, lr=5e-3)
 

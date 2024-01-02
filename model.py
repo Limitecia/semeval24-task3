@@ -14,12 +14,13 @@ class EmotionCausalModel(nn.Module):
         spk_config: Config,
         em_config: Config,
         ut_embed_size,
+        cls_index: int,
         finetune: bool = False
     ):
         super().__init__()
         self.word_embed = PretrainedEmbedding(pretrained, word_config.embed_size, word_config.pad_index, finetune=finetune)
-        self.ut_embed = nn.LSTM(input_size=word_config.embed_size, hidden_size=ut_embed_size,
-                                bidirectional=True, dropout=0.1, num_layers=1, batch_first=True)
+        # self.ut_embed = nn.LSTM(input_size=word_config.embed_size, hidden_size=ut_embed_size,
+        #                         bidirectional=True, dropout=0.1, num_layers=1, batch_first=True)
         self.spk_embed = nn.Embedding(
             num_embeddings=spk_config.vocab_size, embedding_dim=spk_config.embed_size, padding_idx=spk_config.pad_index)
         self.em_embed = nn.Embedding(
@@ -27,13 +28,13 @@ class EmotionCausalModel(nn.Module):
         )
         self.em_pad_index = em_config.pad_index
 
-        self.ut_cause = FFN(in_features=ut_embed_size*2+spk_config.embed_size,
+        self.ut_cause = FFN(in_features=word_config.embed_size+spk_config.embed_size,
                             out_features=ut_embed_size, activation=nn.LeakyReLU(0.1))
-        self.ut_effect = FFN(in_features=ut_embed_size*2+spk_config.embed_size,
+        self.ut_effect = FFN(in_features=word_config.embed_size+spk_config.embed_size,
                              out_features=ut_embed_size, activation=nn.LeakyReLU(0.1))
-        self.em_cause = FFN(in_features=ut_embed_size*2+spk_config.embed_size,
+        self.em_cause = FFN(in_features=word_config.embed_size+spk_config.embed_size,
                             out_features=ut_embed_size, activation=nn.LeakyReLU(0.1))
-        self.em_effect = FFN(in_features=ut_embed_size*2+spk_config.embed_size,
+        self.em_effect = FFN(in_features=word_config.embed_size+spk_config.embed_size,
                              out_features=ut_embed_size, activation=nn.LeakyReLU(0.1))
         self.ut_attn = Biaffine(n_in=ut_embed_size, n_out=1, bias_x=True, bias_y=False)
         self.em_attn = Biaffine(n_in=ut_embed_size, n_out=em_config.vocab_size, bias_x=True, bias_y=True)
@@ -94,7 +95,7 @@ class EmotionCausalModel(nn.Module):
         spk_embed = self.spk_embed(speakers)
 
         # ut_embed ~ [batch_size, max(conv_len), ut_embed_size]
-        ut_embed = torch.stack([torch.concat(self.ut_embed(word_embed[i])[1][0].unbind(0), dim=-1) for i in range(batch_size)], dim=0)
+        ut_embed = torch.stack([word_embed[i,:, 0] for i in range(batch_size)], dim=0)
         ut_embed = torch.concat([ut_embed, spk_embed], dim=-1)
 
         # compute cause-effect representations
@@ -105,7 +106,7 @@ class EmotionCausalModel(nn.Module):
 
         s_ut = self.ut_attn(ut_effect, ut_cause)
         s_em = torch.permute(self.em_attn(em_effect, em_cause), (0, 2, 3,1))
-        return word_embed, s_ut, s_em
+        return word_embed[:, :, 1:], s_ut, s_em
 
 
 

@@ -49,7 +49,8 @@ class Biaffine(nn.Module):
         bias_x: bool = True,
         bias_y: bool = True,
         decompose: bool = False,
-        init: Callable = nn.init.zeros_
+        init: Callable = nn.init.zeros_,
+        **kwargs
     ) -> Biaffine:
         super().__init__()
 

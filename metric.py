@@ -5,8 +5,8 @@ import torch
 
 
 class Subtask1Metric:
-    ATTRIBUTES = ['n', 'count', '_etp', '_pred', '_gold', '_stp', '_spred', '_sgold', '_loss']
-    METRICS = ['fs', 'pfs', 'loss']
+    ATTRIBUTES = ['n', 'count', '_utp', '_upred', '_ugold', '_er', '_ep', '_ef', '_stp', '_spred', '_sgold', '_loss']
+    METRICS = ['ur', 'up', 'uf', 'er', 'ep', 'ef', 'pf']
     eps = 1e-12
 
     def __init__(
@@ -45,15 +45,30 @@ class Subtask1Metric:
         self.n += em_preds.shape[0]
         self._loss += loss
 
-        ut_mask = (em_preds == ems)
-        ut_mask[(em_preds == pad_index) | (ems == pad_index)] = False
-        self._etp += ut_mask.sum()
-        self._pred += (em_preds[pad_mask] != pad_index).sum()
-        self._gold += (ems[pad_mask] != pad_index).sum()
+        # compute metrics for utterance mask
+        ut_preds, uts = em_preds != pad_index, ems != pad_index
+        self._utp += (ut_preds & uts).sum()
+        self._upred += ut_preds.sum()
+        self._ugold += uts.sum()
 
-        ut_mask
-        if ut_mask.sum() > 0:
-            self._stp += (span_preds[ut_mask] & spans[ut_mask]).sum()
+        # compute metrics for the emotions
+        classes, counts = ems[ems != pad_index].unique(return_counts=True)
+        etp, epred, egold = torch.zeros_like(classes), torch.zeros_like(classes), torch.zeros_like(classes)
+        for i, c in enumerate(classes):
+            etp[i] = ((em_preds == c) & (ems == c)).sum()
+            epred[i] = (em_preds == c).sum()
+            egold[i] = (ems == c).sum()
+        weights = counts/counts.sum()
+        er = etp/egold
+        ep = torch.where(epred == 0, 0, etp/epred)
+        self._ef += torch.dot(weights, torch.where(er+ep == 0, 0, (2*er*ep)/(er+ep)))
+        self._er += torch.dot(weights, er)
+        self._ep += torch.dot(weights, ep)
+
+        # compute metrics for spans
+        em_mask = (em_preds == ems) & (em_preds != pad_index) & (ems != pad_index)
+        if em_mask.sum() > 0:
+            self._stp += (span_preds[em_mask] & spans[em_mask]).sum()
             self._spred += span_preds[pad_mask].sum()
             self._sgold += spans[pad_mask].sum()
 
@@ -64,20 +79,36 @@ class Subtask1Metric:
 
         return self
 
+    @property
+    def ep(self):
+        return self._ep/self.count
 
     @property
-    def fs(self) -> float:
-        rec = self._etp/(self._gold + self.eps)
-        prec = self._etp/(self._pred + self.eps)
-        f1 = (2*rec*prec)/(rec+prec + self.eps)
-        return f1
+    def er(self):
+        return self._er/self.count
+
+    @property
+    def ef(self):
+        return self._ef/self.count
+
+    @property
+    def up(self):
+        return self._utp/(self._upred + self.eps)
+
+    @property
+    def ur(self):
+        return self._utp/self._ugold
+
+    @property
+    def uf(self):
+        return (2*self.up*self.ur)/(self.ur + self.up + self.eps)
 
     @property
     def loss(self):
         return self._loss/self.count
 
     @property
-    def pfs(self):
+    def pf(self):
         rec = self._stp/(self._sgold + self.eps)
         prec = self._stp/(self._spred + self.eps)
         f1 = (2*rec*prec)/(rec+prec + self.eps)
@@ -85,4 +116,4 @@ class Subtask1Metric:
 
 
     def __repr__(self):
-        return ' '.join(f'{name}={round(getattr(self, name), 2)}' for name in self.METRICS)
+        return f'loss={round(self.loss,2)}, ' + ', '.join(f'{name.upper()}={round(getattr(self, name)*100, 2)}' for name in self.METRICS)

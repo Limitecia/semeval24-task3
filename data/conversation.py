@@ -28,8 +28,8 @@ class Conversation:
         self.GRAPH = torch.zeros(len(self), len(self), dtype=torch.bool)
         self.SPAN = torch.zeros(len(self), len(self), max(map(len, self.utterances)))
         for pair in self.pairs:
-            self.GRAPH[pair.EFFECT.ID - 1, pair.CAUSE.ID - 1] = True
-            self.SPAN[pair.EFFECT.ID - 1, pair.CAUSE.ID -1][:len(pair.SPAN)] = torch.tensor(pair.SPAN)
+            self.GRAPH[pair.CAUSE.ID - 1, pair.EFFECT.ID - 1] = True
+            self.SPAN[pair.CAUSE.ID - 1, pair.EFFECT.ID -1][:len(pair.SPAN)] = torch.tensor(pair.SPAN)
         self.SPAN = self.SPAN.to(torch.bool)
         for field in Utterance.FIELDS:
             self.__setattr__(field, [getattr(ut, field) for ut in self.utterances])

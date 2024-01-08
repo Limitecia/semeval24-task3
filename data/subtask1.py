@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import List, Tuple
 from data.conversation import Conversation
+from data.relation import CauseRelation
 from torch.utils.data import Dataset
 import json, torch, os
 from utils import flatten_list
@@ -31,11 +32,11 @@ class Subtask1Dataset(Dataset):
     def __len__(self):
         return len(self.conversations)
 
-    def __getitem__(self, index: int) -> Tuple[list, list]:
+    def __getitem__(self, index: int) -> Tuple[list, list, List[CauseRelation]]:
         conver = self.conversations[index]
         inputs = [getattr(conver, field) for field in self.input_fields]
         targets = [getattr(conver, field) for field in self.target_fields]
-        return inputs, targets
+        return inputs, targets, conver.pairs
 
     @classmethod
     def from_path(
@@ -43,9 +44,6 @@ class Subtask1Dataset(Dataset):
         path: str,
         inputs_fields: List[str],
         target_fields: List[str],
-        build: bool,
-        num_workers: int = os.cpu_count(),
-        show: bool = True
     ) -> Subtask1Dataset:
         with open(path, 'r') as reader:
             data = json.load(reader)

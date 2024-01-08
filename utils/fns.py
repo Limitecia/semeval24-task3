@@ -23,6 +23,15 @@ def to(tensors, device):
             result.append(to(tensor, device))
     return result
 
+def cuda(tensors):
+    result = []
+    for tensor in tensors:
+        if isinstance(tensor, torch.Tensor):
+            result.append(tensor.cuda())
+        else:
+            result.append(cuda(tensor))
+    return result
+
 
 def onehot(indices: List[torch.Tensor], num_classes: int) -> torch.Tensor:
     mask = torch.zeros((len(indices), num_classes))

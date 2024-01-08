@@ -248,26 +248,28 @@ class WordTokenizer(Tokenizer):
         self.fn = None
         self.fix_len = fix_len
 
-        self.bos_token = self.tokenizer.bos_token or self.tokenizer.pad_token
-        self.eos_token = self.tokenizer.eos_token or self.tokenizer.pad_token
-        self.pad_token = self.tokenizer.pad_token or self.tokenizer.eos_token
+        self.tokenizer.eos_token_id = self.tokenizer.pad_token_id
+
+        self.bos_token = self.tokenizer.bos_token
+        self.eos_token = self.tokenizer.eos_token
+        self.pad_token = self.tokenizer.pad_token
         self.unk_token = self.tokenizer.unk_token
 
     @property
     def pad_index(self):
-        return self.tokenizer.encode(self.pad_token).pop()
+        return self.tokenizer.pad_token_id
 
     @property
     def bos_index(self):
-        return self.tokenizer.encode(self.bos_token).pop()
+        return self.tokenizer.bos_token_id
 
     @property
     def eos_index(self):
-        return self.tokenizer.encode(self.eos_token).pop()
+        return self.tokenizer.eos_token_id
 
     @property
     def unk_index(self):
-        return self.tokenizer.encode(self.unk_token).pop()
+        return self.tokenizer.unk_token_id
 
     def __repr__(self):
         return f'WordTokenizer(field={self.field}, name={self.name}, bos={self.bos}, eos={self.eos})'
@@ -409,7 +411,7 @@ class GraphTokenizer(LabeledGraphTokenizer):
         Returns:
             ~ torch.Tensor: ``[batch_size, pad(seq_len), pad(seq_len)]``
         """
-        lens = list(map(lambda x: x.shape[1], batch))
+        lens = list(map(lambda x: x.shape[0], batch))
         padded1 = pad_sequence(flatten_list(self.encode(x).unbind(0) for x in batch), batch_first=True, padding_value=self.pad_index).split(lens)
         padded0 = pad_sequence(padded1, batch_first=True, padding_value=self.pad_index)
         return padded0.to(torch.bool)

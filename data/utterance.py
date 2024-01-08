@@ -7,7 +7,7 @@ class Utterance:
 
     def __init__(self, ID: int, TEXT: str, SPEAKER: str, EMOTION: str):
         self.ID = ID
-        self.TEXT = TEXT.strip()
+        self.TEXT = TEXT.strip().lower()
         self.words = np.array(self.TEXT.split())
         self.SPEAKER = SPEAKER
         self.EMOTION = EMOTION

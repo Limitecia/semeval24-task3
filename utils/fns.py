@@ -46,16 +46,19 @@ def split(items: list, lens: List[int]):
     return result
 
 
-def multipad(inputs: List[torch.Tensor], target_dims: Tuple[int], pad_value: int, dtype = torch.float32):
-    for i, target_dim in enumerate(target_dims[::-1]):
-        def mask(input: torch.Tensor) -> torch.Tensor:
-            dims = list(iter(input.shape))
-            dims[-(i+1)] = target_dim-dims[-(i+1)]
-            return torch.full(dims, fill_value=pad_value, dtype=dtype)
+def pad(x: torch.Tensor, pad_value: int, target_dims: Tuple[int], dims: Tuple[int]):
+    for target_dim, dim in zip(target_dims, dims):
+        s = list(x.shape)
+        s[dim] = target_dim - s[dim]
+        padding = torch.zeros(s).fill_(pad_value)
+        x = torch.concat([x, padding], dim=dim)
+    return x
 
-        inputs = [
-            torch.concat([input, mask(input)], dim=-(i+1))
-            for input in inputs
-        ]
-    return torch.stack(inputs, dim=0)
 
+def expand_mask(x: torch.Tensor) -> torch.Tensor:
+    mask = x.unsqueeze(-1).expand(*[-1 for _ in x.shape], x.shape[-1]).clone()
+    dim0, dim1 = (~x).nonzero().T.tolist()
+    mask[dim0, :, dim1] = False 
+    return mask
+    
+    

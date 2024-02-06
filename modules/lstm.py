@@ -1,7 +1,7 @@
 import torch.nn as nn
 from modules.ffn import FFN
 import torch
-from typing import Optional
+from typing import Optional, Tuple
 
 class LSTM(nn.Module):
     def __init__(
@@ -22,9 +22,18 @@ class LSTM(nn.Module):
             self.ffn = activation
         else:
             self.ffn = FFN(in_features=hidden_size, out_features=output_size, activation=activation)
+        self.reset_parameters()
 
-    def forward(self, x: torch.Tensor):
-        h, _ = self.lstm(x)
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        h, (_, c) = self.lstm(x)
         y = self.ffn(h)
-        return y
+        return y, c
 
+    def reset_parameters(self):
+        for param in self.parameters():
+            # apply orthogonal_ to weight
+            if len(param.shape) > 1:
+                nn.init.orthogonal_(param)
+            # apply zeros_ to bias
+            else:
+                nn.init.zeros_(param)

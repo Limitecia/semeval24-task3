@@ -14,6 +14,7 @@ class FFN(nn.Module):
         self.out_features = out_features
         self.in_features = in_features
         self.out_features = out_features
+        self.reset_parameters()
 
     def forward(self, x: torch.Tensor):
         if len(x.shape) > 2:
@@ -22,3 +23,6 @@ class FFN(nn.Module):
             return self.act(self.mlp(x))
 
 
+    def reset_parameters(self):
+        nn.init.orthogonal_(self.mlp.weight)
+        nn.init.zeros_(self.mlp.bias)

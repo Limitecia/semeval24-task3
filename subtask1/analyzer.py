@@ -8,10 +8,9 @@ from utils import *
 from torch.utils.data import DataLoader, Dataset
 from subtask1.model import Subtask1Model
 from tqdm import tqdm
-from metric import Subtask1Metric
+from utils.metric import Subtask1Metric
 from torch.optim import AdamW, Optimizer, Adam, RMSprop
 from torch.optim.lr_scheduler import StepLR
-import numpy as np 
 
 class Subtask1Analyzer:
     def __init__(

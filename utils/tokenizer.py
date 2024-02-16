@@ -129,10 +129,13 @@ class Tokenizer:
 
     def batch_encode(self, batch: Iterator[Iterator[str]]) -> Union[torch.Tensor, List[torch.Tensor]]:
         unpadded = [self.encode(tokens) for tokens in batch]
+        return self.pad_batch(unpadded)
+        
+    def pad_batch(self, encoded: List[torch.Tensor]) -> Union[torch.Tensor, List[torch.Tensor]]:
         if self.pad_token:
-            return pad_sequence(unpadded, batch_first=True, padding_value=self.pad_index)
+            return pad_sequence(encoded, batch_first=True, padding_value=self.pad_index)
         else:
-            return unpadded
+            return encoded 
 
     def decode(self, indices: torch.Tensor, remove_unk: bool = False):
         assert len(indices.shape) == 1, 'torch Tensor must have only one dimension for decoding'
@@ -195,7 +198,7 @@ class Tokenizer:
 
 class PositionalTokenizer(Tokenizer):
     EXTENSION = 'tkz-pos'    
-    OBJECTS = ['field', 'max_position', 'lower', 'pad_token', 'unk_token', 'bos_token', 'eos_token', 'counter']
+    OBJECTS = ['field', 'max_position', 'lower', 'pad_token', 'unk_token', 'bos_token', 'eos_token']
     TRAINABLE = False
     
     def __init__(
@@ -258,6 +261,17 @@ class PositionalTokenizer(Tokenizer):
         return cls(**data)
 
 
+class RawTokenizer(Tokenizer):
+    EXTENSION = 'tkz-raw'
+    OBJECTS = ['field']
+    TRAINABLE = False
+    
+    def __init__(self, field: str):
+        self.field = field 
+        
+    def batch_encode(self, batch: List[List[str]]):
+        return batch
+
 
 class TextTokenizer(Tokenizer):
     EXTENSION = 'tkz-text'
@@ -276,7 +290,7 @@ class TextTokenizer(Tokenizer):
     ):
         self.field = field
         self.name = name
-        self.tokenizer = AutoTokenizer.from_pretrained(name, padding_side='right', do_lower_case=lower)
+        self.tokenizer = AutoTokenizer.from_pretrained(name, padding_side='right', do_lower_case=lower, low_memory=False)
         self.lower = lower
         self.bos = bos
         self.eos = eos
@@ -329,18 +343,25 @@ class TextTokenizer(Tokenizer):
             words.append(self.eos_token)
         return words
 
-    def encode(self, texts: List[str]) -> torch.Tensor:
-        words = [self.preprocess(text.split()) for text in texts]
+    def encode(self, conv: List[str]) -> torch.Tensor:
+        words = [self.preprocess(ut.split()) for ut in conv]
         lens = list(map(len, words))
         tokens = self.tokenizer(flatten_list(words), padding='max_length', truncation=True, max_length=self.fix_len, add_special_tokens=False, return_tensors='pt')
         ids = pad_sequence(tokens['input_ids'].split(lens), batch_first=True, padding_value=self.pad_index)
         return ids
 
-    def batch_encode(self, batch: List[Iterator[str]]) -> torch.Tensor:
+    def batch_encode(self, batch: List[List[str]]) -> torch.Tensor:
         conv_lens = list(map(len, batch))
         unpadded = self.encode(flatten_list(batch)).split(conv_lens, dim=0)
         padded = pad_sequence(unpadded, batch_first=True, padding_value=self.pad_index)
         return padded
+    
+    def pad_batch(self, encoded: List[torch.Tensor]) -> torch.Tensor:
+        conv_lens = [conv.shape[0] for conv in encoded]
+        padded1 = pad_sequence(flatten_list(x.unbind(0) for x in encoded), True, self.pad_index)
+        padded0 = pad_sequence(padded1.split(conv_lens), True, self.pad_index)
+        return padded0 
+        
 
     def decode(self, indices: torch.Tensor, remove_unk: bool = True) -> str:
         assert len(indices.shape) == 1, 'Tensor must be flatten to decode'
@@ -377,6 +398,9 @@ class GraphTokenizer(Tokenizer):
         padded1 = pad_sequence(flatten_list(self.encode(x).unbind(0) for x in batch), batch_first=True, padding_value=self.pad_index).split(lens)
         padded0 = pad_sequence(padded1, batch_first=True, padding_value=self.pad_index)
         return padded0.to(torch.bool)
+    
+    def pad_batch(self, encoded: List[torch.Tensor]) -> torch.Tensor:
+        return self.batch_encode(encoded)
 
     def fit(self, tokens: Iterable[str], show: bool = False):
         raise NotImplementedError
@@ -422,7 +446,6 @@ class SpanTokenizer(Tokenizer):
         with open(path, 'rb') as reader:
             data = pickle.load(reader)
         return cls(**data)
-
 
 
 

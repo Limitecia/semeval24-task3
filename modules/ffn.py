@@ -6,7 +6,7 @@ class FFN(nn.Module):
         self,
         in_features: int,
         out_features: int,
-        activation: nn.Module = nn.Identity()
+        activation: nn.Module = nn.LeakyReLU()
     ):
         super().__init__()
         self.mlp = nn.Linear(in_features=in_features, out_features=out_features)

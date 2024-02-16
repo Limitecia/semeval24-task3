@@ -1,5 +1,6 @@
 import torch
 from typing import List, Tuple, Union
+from transformers.feature_extraction_utils import BatchFeature
 
 def flatten_list(lists):
     result = list()
@@ -14,13 +15,13 @@ def flatten_set(sets):
     return result
 
 
-def to(tensors, device):
+def to(device, *tensors):
     result = []
     for tensor in tensors:
-        if isinstance(tensor, torch.Tensor):
+        if isinstance(tensor, torch.Tensor) or isinstance(tensor, BatchFeature):
             result.append(tensor.to(device))
         else:
-            result.append(to(tensor, device))
+            result.append(to(device, *tensor))
     return result
 
 def cuda(tensors):
@@ -39,10 +40,15 @@ def onehot(indices: List[torch.Tensor], num_classes: int) -> torch.Tensor:
         mask[i, cols.tolist()] = 1
     return mask.to(torch.bool)
 
-def split(items: list, lens: List[int]):
+def split(items: list, lens: Union[List[int], int]):
     result = []
-    for l in lens:
-        result.append([items.pop(0) for _ in range(l)])
+    items = list(items)
+    if isinstance(lens, int):
+        while len(items) > 0:
+            result.append([items.pop(0) for _ in range(min(len(items), lens))])
+    else:
+        for l in lens:
+            result.append([items.pop(0) for _ in range(l)])
     return result
 
 
@@ -62,3 +68,6 @@ def expand_mask(x: torch.Tensor) -> torch.Tensor:
     return mask
     
     
+    
+def normalize(x: torch.Tensor) -> torch.Tensor:
+    return (x - x.min().item())/(x.max().item() - x.min().item())

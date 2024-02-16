@@ -11,7 +11,7 @@ class LSTM(nn.Module):
         output_size: Optional[int] = None,
         num_layers: int = 1,
         bidirectional: bool = True,
-        activation: nn.Module = nn.Identity(),
+        activation: nn.Module = nn.LeakyReLU(),
         dropout: float = 0.0,
     ):
         super().__init__()
@@ -27,6 +27,8 @@ class LSTM(nn.Module):
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         h, (_, c) = self.lstm(x)
         y = self.ffn(h)
+        if self.bidirectional:
+            c = c.permute(1, 2, 0).flatten(-2, -1)
         return y, c
 
     def reset_parameters(self):

@@ -12,10 +12,7 @@ class Subtask1Dataset(Dataset):
     TARGET_FIELDS = ['EMOTION', 'GRAPH', 'SPAN']
     
 
-    def __init__(
-        self,
-        convs: List[Conversation]
-    ):
+    def __init__(self, convs: List[Conversation]):
         super().__init__()
         self.convs = convs
 
@@ -45,7 +42,7 @@ class Subtask1Dataset(Dataset):
         with open(path, 'r') as reader:
             data = json.load(reader)
 
-        convs = [Conversation.from_dict(d) for d in data]
+        convs = [Conversation.from_dict(d, subtask=1) for d in data]
         data = Subtask1Dataset(convs)
         return data
 
@@ -61,7 +58,7 @@ class Subtask1Dataset(Dataset):
         data = [conv.to_dict(submission) for conv in sorted(self.convs, key=lambda conv: conv.id)]
         with open(path, 'w') as writer:
             json.dump(data, writer, indent=4)
-            
+
             
     @property
     def lens(self) -> torch.Tensor:

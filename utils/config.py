@@ -13,6 +13,11 @@ class Config:
     def update(self, **kwargs):
         for key, value in kwargs.items():
             self.__setattr__(key, value)
+            
+    def pop(self, name):
+        value = getattr(self, name)
+        self.__delattr__(name)
+        return value 
 
     @classmethod
     def from_class(cls, data) -> Config:

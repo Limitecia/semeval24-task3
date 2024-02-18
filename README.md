@@ -1,9 +1,9 @@
-# LyS at SemEval 2024: Multimodal Cause Emotion Extraction in Multi-Party Conversations 💁🏼‍♀️💭🙋🏽
+# LyS at SemEval 2024: Multimodal Cause Emotion Extraction in Multi-Party Conversations 💁🏻‍♂️💭🙋🏻‍♀️
 
 Hi!👋 This repository contains the code developed for our proposal *"An Early Prototype for End-to-End Emotion
 Linking as Graph-Based Parsing"* (soon available) for the [SemEval 2024 (Task 3)](https://nustm.github.io/SemEval-2024_ECAC/). 
 
-## Requirements 
+## Requirements ⚙️
 
 Our models are entirely implemented in [Python 3.10.7](https://www.python.org/downloads/release/python-3107/) with the following libraries:
 
@@ -20,7 +20,7 @@ To automatically install all the packages, run the [requirements.txt](requiremen
 pip3 install -r requirements.txt
 ```
 
-## Data preparation 
+## Data preparation 🛠️
 
 The train and validation sets used to conduct our experiments can be found in the folder [dataset/](dataset/). The folder [dataset/text/](dataset/text/) stores the main JSON files to conduct both subtasks and, at first instance, the folders [dataset/video](dataset/video/)  and [dataset/audio/](dataset/audio/) will be empty. To properly prepare the data, ensure the following data folder structure:
 
@@ -49,7 +49,7 @@ python3 audio.py
 ```
 
 
-## Subtask 1. Textual Cause Emotion Extraction 
+## Subtask 1. Textual Cause Emotion Extraction ✍️
 
 The script [subtask1.py](subtask1.py) executes the system described for the first subtask. The model configuration can be fixed with an INI file (see [config/subtask1.ini](config/subtask1.ini) for default configuration). By default, results will be stored and loaded from [results/subtask1/](results/subtask1/) folder and the train, validation and test set used will be those specified above.
 
@@ -72,7 +72,7 @@ python3 subtask1.py eval
 ```
 
 
-## Subtask 2. Multimodal Cause Emotion Extraction
+## Subtask 2. Multimodal Cause Emotion Extraction 🗣️
 The script [subtask2.py](subtask2.py) executes the system described for the second subtask. The model configuration can be fixed with an INI file (see [config/subtask2.ini](config/subtask2.ini) for default configuration). Suggested arguments to change (depending on the computational capabilities of your machine) are the pretrained vision and audio models, as well as the number of frames loaded per video and the embedding size of each modality.  By default, results will be stored and loaded from [results/subtask2/](results/subtask2/) folder and the train, validation and test set used will be those specified above.
 
 1. Training:

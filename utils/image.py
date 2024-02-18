@@ -1,13 +1,7 @@
-from typing import Tuple, List, Optional
-import torch, time, os, cv2
-from torch.nn.utils.rnn import pad_sequence
+from typing import List
+import torch, os, cv2
 from transformers import AutoImageProcessor
-from transformers.feature_extraction_utils import BatchFeature
-import numpy as np 
-from utils import flatten_list, split 
-from dataclasses import dataclass
-from torchvision.transforms import Resize
-from torch.nn.functional import interpolate
+from utils import flatten_list, Tokenizer
 from tqdm import tqdm 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -32,9 +26,9 @@ def read_video(path: str, num_frames: int) -> torch.Tensor:
     return frames
 
 
-class ImageProcessor:
+class ImageProcessor(Tokenizer):
     EXTENSION = 'img'
-    OBJECTS = ['field', 'pretrained', 'num_frames']
+    OBJECTS = ['field', 'pretrained', 'num_frames', 'num_workers']
     TRAINABLE = False
 
     def __init__(
@@ -56,18 +50,8 @@ class ImageProcessor:
         for key in self.OBJECTS:
             self.__setattr__(key, locals()[key])
 
-    def fit(self, paths: List[str]):
-        # with ThreadPoolExecutor(max_workers=self.num_workers) as pool:
-            # batch_size = len(paths)//self.num_workers
-            # futures = [pool.submit(read_videos, paths[i:(i+batch_size)], self.num_frames) for i in range(0, len(paths), batch_size)]
-            # futures = flatten_list(f.result() for f in futures)
-            # futures = list(tqdm(pool.map(read_video, paths, [self.num_frames for _ in paths]), total=len(paths), desc=self.field))
-        # self.data = dict(zip(paths, futures))
-        pass
-
     def encode(self, paths: List[str]) -> List[torch.Tensor]:
         return [self.processor(self.data[path], return_tensors='pt').pixel_values for path in paths]
-
 
     def batch_encode(self, batch: List[List[str]]) -> List[List[torch.Tensor]]:
         nonstored = list(set(flatten_list(batch)) - self.data.keys())

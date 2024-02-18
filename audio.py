@@ -9,8 +9,6 @@ def load_audio(path: str):
     torch.save(audio, path.replace('.mp4', '.wav'))
 
         
-        
-    
 if __name__ == '__main__':
     num_workers = 20
     folder = 'dataset/video/'

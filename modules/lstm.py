@@ -29,6 +29,8 @@ class LSTM(nn.Module):
         y = self.ffn(h)
         if self.bidirectional:
             c = c.permute(1, 2, 0).flatten(-2, -1)
+        else:
+            c = c.squeeze(0)
         return y, c
 
     def reset_parameters(self):

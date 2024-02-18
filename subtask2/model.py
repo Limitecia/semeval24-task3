@@ -48,11 +48,11 @@ class Subtask2Model(nn.Module):
         # decoder 
         self.ut_cause = FFN(ut_input_size, ut_embed_size)
         self.ut_effect = FFN(ut_input_size, ut_embed_size)
-        self.ut_attn = Biaffine(n_in=ut_embed_size, n_out=2, bias_x=True, bias_y=True, dropout=0.3)
+        self.ut_attn = Biaffine(n_in=ut_embed_size, n_out=2, bias_x=True, bias_y=True, dropout=0.1)
 
         self.em_cause = FFN(ut_input_size, ut_embed_size)
         self.em_effect = FFN(ut_input_size, ut_embed_size)
-        self.em_attn = Biaffine(n_in=ut_embed_size, n_out=em_conf.vocab_size, dropout=0.3, bias_x=True, bias_y=True)
+        self.em_attn = Biaffine(n_in=ut_embed_size, n_out=em_conf.vocab_size, dropout=0.1, bias_x=True, bias_y=True)
 
         # loss functions 
         self.criterion = nn.CrossEntropyLoss()
@@ -69,11 +69,11 @@ class Subtask2Model(nn.Module):
             self,
             words: torch.Tensor,
             speakers: torch.Tensor,
-            frames: List[torch.Tensor],
-            audios: List[BatchFeature]
+            frames: Optional[List[List[torch.Tensor]]],
+            audios: Optional[List[BatchFeature]]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        frames = to(self.img_conf.device, frames)[0] if self.img_conf is not None else None 
-        audios = to(self.audio_conf.device, audios)[0] if self.audio_conf is not None else None
+        frames = to(self.img_conf.device, *frames) if self.img_conf is not None else None 
+        audios = to(self.audio_conf.device, *audios) if self.audio_conf is not None else None
         ut_embed = self.encode(*to(self.text_conf.device, words, speakers), frames, audios)
         return self.decode(ut_embed)        
         
@@ -120,7 +120,7 @@ class Subtask2Model(nn.Module):
         emotions: torch.Tensor,
         graphs: torch.Tensor, 
         pad_mask: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor:
         graphs, emotions, pad_mask = to(self.device, graphs, emotions, pad_mask)
 
         # compute utterance unlabeled cause-relation
@@ -130,10 +130,10 @@ class Subtask2Model(nn.Module):
 
         # compute utterance labeled cause-relation gold
         ems = torch.zeros_like(graphs, dtype=torch.int32, device=graphs.device)
-        b, cause, effect = graphs.nonzero(as_tuple=True)
+        b, cause, effect = (s_ut.argmax(-1).to(torch.bool) | graphs).nonzero(as_tuple=True)
         ems[b, cause, effect] = emotions[b, effect]
         em_loss = self.criterion(s_em[ut_mask], ems[ut_mask].to(torch.long))
-        return ut_loss, em_loss
+        return ut_loss + em_loss
 
 
     def predict(

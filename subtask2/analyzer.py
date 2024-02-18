@@ -1,27 +1,37 @@
 from __future__ import annotations
-
-import os, torch, pickle, shutil
+import torch 
 import torch.nn as nn
-from typing import List, Tuple, Callable
+from typing import List, Tuple
 from data import Subtask2Dataset, Conversation
 from utils import *
-from torch.utils.data import DataLoader
 from subtask2.model import Subtask2Model
-from tqdm import tqdm
 from utils.metric import Subtask2Metric
-from torch.optim import AdamW, Optimizer, Adam, RMSprop
 from torch.optim.lr_scheduler import StepLR
 from analyzer import Analyzer
 
 
 class Subtask2Analyzer(Analyzer):
-    MODEL = Subtask2Model
+    METRIC = Subtask2Metric
+    MODEL = Subtask2Model 
     INPUT_FIELDS = ['TEXT', 'SPEAKER', 'FRAME', 'AUDIO']
-    TARGET_FIELDS = ['EMOTION', 'GRAPH', 'SPAN']
+    TARGET_FIELDS = ['EMOTION', 'GRAPH']
 
+    def train_step(
+            self, 
+            inputs: Tuple[torch.Tensor], 
+            targets: Tuple[torch.Tensor], 
+            masks: Tuple[torch.Tensor]
+        ) -> torch.Tensor:
+        scores = self.model(*inputs)
+        return self.model.loss(*scores, *targets, *masks)
 
     @torch.no_grad()
-    def pred_step(self, inputs: Tuple[torch.Tensor], masks: Tuple[torch.Tensor], convs: List[Conversation]) -> List[Conversation]:
+    def pred_step(
+            self, 
+            inputs: Tuple[torch.Tensor], 
+            masks: Tuple[torch.Tensor], 
+            convs: List[Conversation]
+        ) -> List[Conversation]:
         pad_mask, *_ = masks
         lens = pad_mask.sum(-1).tolist()
         ut_preds, em_preds = self.model.predict(*inputs, *masks)

@@ -3,48 +3,68 @@ from data.relation import CauseRelation
 from data.utterance import Utterance
 from typing import List, Dict, Optional 
 import torch
-import numpy as np
 
 class Conversation:
     NO_CAUSE = '_'
     SEP = '_'
 
-    def __init__(self, id: int, uts: List[Utterance], pairs: List[CauseRelation], subtask: int):
+    def __init__(
+            self, 
+            id: int, 
+            uts: List[Utterance], 
+            pairs: List[CauseRelation],
+            subtask: int
+    ):
         self.id = id
         self.uts = uts
         self.pairs = pairs
         self.GRAPH = None
         self.SPAN = None
-        self.build(subtask)
-        self.subtask = subtask
+        self.subtask = subtask 
+        self.build()
 
-    def build(self, subtask: int):
+    def build(self):
         self.GRAPH = torch.zeros(len(self), len(self), dtype=torch.bool)
         self.SPAN = torch.zeros(len(self), len(self), max(map(len, self.uts)))
         rem = []
         for i, pair in enumerate(self.pairs):
+            # some relations are repeated, skip them 
             if self.GRAPH[pair.CAUSE.ID - 1, pair.EFFECT.ID - 1]:
                 rem.append(i)
                 continue 
+            
+            # add the relation in the GRAPH tensor
             self.GRAPH[pair.CAUSE.ID - 1, pair.EFFECT.ID - 1] = True
-            if subtask != 2:
+            
+            if self.subtask != 2:
                 self.SPAN[pair.CAUSE.ID - 1, pair.EFFECT.ID -1][:len(pair.SPAN)] = pair.SPAN.clone()
+                
         self.pairs = [pair for i, pair in enumerate(self.pairs) if i not in rem]
 
-        if subtask != 2:
+        if self.subtask != 2:
             for ut in self.uts:
                 self.SPAN[ut.ID - 1, :, len(ut):] = -1
+                
         for field in Utterance.FIELDS:
             self.__setattr__(field, [getattr(ut, field) for ut in self.uts])
             
     @classmethod
-    def from_dict(cls, data: dict, subtask: int, video_folder: Optional[str] = None) -> Conversation:
+    def from_dict(cls, data: dict, video_folder: Optional[str] = None) -> Conversation:
+        """Creates a Conversation instance from an input dictionary and the folder where 
+        videos and audios are stored.
+
+        Args:
+            data (dict): Input dictionary following the annotated format.
+            video_folder (Optional[str]): Folder with stored videos and audios. If None, assume 
+            that the first subtask is executing.
+
+        Returns:
+            Conversation instance.
+        """
         id = data.pop('conversation_ID')
         conversation = data.pop('conversation')
 
-        # extract uts
         uts = [Utterance.from_dict(ut, video_folder) for ut in conversation]
-
 
         # extract cause-relation pairs
         if 'emotion-cause_pairs' not in data.keys():
@@ -52,11 +72,11 @@ class Conversation:
         else:
             pairs = data.pop('emotion-cause_pairs')
             pairs = [(*pair[0].split(Conversation.SEP), *pair[1].split(Conversation.SEP)) for pair in pairs]
-            if subtask == 2:
+            if video_folder:
                 pairs = [CauseRelation(CAUSE=uts[int(c) - 1], EFFECT=uts[int(e) - 1], SPAN=None) for e, _, c in pairs]
             else:
                 pairs = [CauseRelation(CAUSE=uts[int(c) - 1], EFFECT=uts[int(e) - 1], SPAN=span) for e, _, c, span in pairs]
-        return Conversation(id, uts, pairs, subtask)
+        return Conversation(id, uts, pairs, 2 if video_folder is not None else 1)
 
     def __len__(self):
         return len(self.uts)
@@ -78,16 +98,6 @@ class Conversation:
     @property
     def max_len(self) -> int:
         return max(map(len, self.uts))
-    
-    @property 
-    def emotions(self) -> Dict[str, int]:
-        ems = dict()
-        for pair in self.pairs:
-            try:
-                ems[pair.EMOTION] += 1 
-            except:
-                ems[pair.EMOTION] = 1
-        return ems 
 
 
     def update1(self, graph: torch.Tensor, ems: List[str], spans: torch.Tensor):

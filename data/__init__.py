@@ -1,4 +1,3 @@
-from .subtask1 import Subtask1Dataset
-from .subtask2 import Subtask2Dataset
+from .dataset import Subtask1Dataset, Subtask2Dataset, SubtaskDataset
 from .conversation import Conversation
 from .relation import CauseRelation

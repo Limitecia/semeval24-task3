@@ -2,11 +2,10 @@ from transformers import AutoFeatureExtractor
 from transformers.feature_extraction_utils import BatchFeature
 from typing import List 
 from torchaudio.functional import resample
-from utils import flatten_list, split
-import numpy as np 
-import torch
+from utils import flatten_list, split, Tokenizer
+import torch, pickle 
 
-class AudioProcessor:
+class AudioProcessor(Tokenizer):
     EXTENSION = 'audio'
     OBJECTS = ['field', 'pretrained']
     TRAINABLE = False 
@@ -25,3 +24,5 @@ class AudioProcessor:
         audios = split([resample(audio, self.audio_rate, self.processor.sampling_rate).numpy() for audio in audios], lens)
         audios = [self.processor(audio, **self.args) for audio in audios]
         return audios
+    
+    

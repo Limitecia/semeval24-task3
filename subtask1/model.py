@@ -18,10 +18,10 @@ class Subtask1Model(nn.Module):
     def __init__(
             self,
             ut_embed_size,
-            device: str,
             text_conf: Config,
             spk_conf: Config,
-            em_conf: Config
+            em_conf: Config,
+            device: str = 'cuda:'
     ):
         super().__init__()
         

@@ -76,7 +76,7 @@ class Subtask2Analyzer(Analyzer):
         text_conf.pad_index = input_tkzs[0].pad_index
         spk_conf = Config(vocab_size=len(input_tkzs[1]), embed_size=spk_embed_size, pad_index=input_tkzs[1].pad_index)
         em_conf = Config(vocab_size=len(target_tkzs[0]), pad_index=target_tkzs[0].pad_index, weights=target_tkzs[0].weights)
-        model = Subtask2Model(ut_embed_size, device, text_conf, spk_conf, img_conf, audio_conf, em_conf)
+        model = Subtask2Model(ut_embed_size, text_conf, spk_conf, img_conf, audio_conf, em_conf, device)
 
         analyzer = Subtask2Analyzer(model, input_tkzs, target_tkzs)
         return analyzer

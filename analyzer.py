@@ -170,13 +170,14 @@ class Analyzer:
         # load tokenizers 
         tkzs = [Tokenizer.load(f'{path}/tkz/{name}') for name in os.listdir(f'{path}/tkz/')]
         tkzs = {tkz.field: tkz for tkz in tkzs}
-        input_tkzs = [tkzs[field] for field in Analyzer.INPUT_FIELDS]
-        target_tkzs = [tkzs[field] for field in Analyzer.TARGET_FIELDS]
+        input_tkzs = [tkzs[field] for field in cls.INPUT_FIELDS]
+        target_tkzs = [tkzs[field] for field in cls.TARGET_FIELDS]
         
         # load params
         with open(f'{path}/params.pickle', 'rb') as reader:
             args = pickle.load(reader)
-        model = cls.MODEL(**args())
+        model = cls.MODEL(**args)
+        print(model)
         
         analyzer = cls(model, input_tkzs, target_tkzs)
         analyzer.load_model(f'{path}/model.pt')

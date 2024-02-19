@@ -187,6 +187,8 @@ class Tokenizer:
             return SpanTokenizer.load(path)
         elif extension == PositionalTokenizer.EXTENSION:
             return PositionalTokenizer.load(path)
+        elif extension == RawTokenizer.EXTENSION:
+            return RawTokenizer.load(path)
         
         with open(path, 'rb') as reader:
             data = pickle.load(reader)
@@ -198,7 +200,7 @@ class Tokenizer:
 
 class PositionalTokenizer(Tokenizer):
     EXTENSION = 'tkz-pos'    
-    OBJECTS = ['field', 'max_position', 'lower', 'pad_token', 'unk_token', 'bos_token', 'eos_token']
+    OBJECTS = ['field', 'max_position', 'lower', 'pad_token', 'unk_token']
     TRAINABLE = False
     
     def __init__(
@@ -208,6 +210,7 @@ class PositionalTokenizer(Tokenizer):
         lower: bool = False,
         pad_token: Optional[str] = PAD_TOKEN,
         unk_token: Optional[str] = UNK_TOKEN,
+        **kwargs
     ):
         self.field = field
         self.lower = lower
@@ -259,7 +262,7 @@ class PositionalTokenizer(Tokenizer):
         with open(path, 'rb') as reader:
             data = pickle.load(reader)
         return cls(**data)
-
+    
 
 class RawTokenizer(Tokenizer):
     EXTENSION = 'tkz-raw'
@@ -271,7 +274,13 @@ class RawTokenizer(Tokenizer):
         
     def batch_encode(self, batch: List[List[str]]):
         return batch
-
+    
+    @classmethod
+    def load(cls, path: str) -> RawTokenizer:
+        with open(path, 'rb') as reader:
+            data = pickle.load(reader)
+        return cls(**data)
+    
 
 class TextTokenizer(Tokenizer):
     EXTENSION = 'tkz-text'

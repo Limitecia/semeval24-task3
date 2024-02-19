@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Optional
-from evaluate import *
+from evaluate import get_json_data, evaluate_1_2, evaluate_2_2
 
 
 class Metric:
@@ -45,8 +45,8 @@ class Subtask1Metric(Metric):
         score_list, score_list_1 = evaluate_1_2(pred_data, gold_data)
         self.WSP, self.WSR, self.WSF = score_list[0:3]
         self.WPP, self.WPR, self.WPF = score_list_1[0:3]
-        self.SP, self.SR, self.SR = score_list[3:6]
-        self.PP, self.PT, self.PF = score_list_1[3:6]
+        self.SP, self.SR, self.SF = score_list[3:6]
+        self.PP, self.PR, self.PF = score_list_1[3:6]
         return self
 
 

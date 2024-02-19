@@ -2,11 +2,7 @@
 import sys, os, json, copy, string
 import numpy as np
 
-if len(sys.argv) > 1: 
-    [_, input_dir, output_dir] = sys.argv
-else:
-    input_dir = './'
-    output_dir = './'
+
 
 emotion_idx = dict(zip(['neutral','anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise'], range(7)))
 
@@ -367,4 +363,9 @@ def main():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1: 
+        [_, input_dir, output_dir] = sys.argv
+    else:
+        input_dir = './'
+        output_dir = './'
     main()

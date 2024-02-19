@@ -17,12 +17,12 @@ class Subtask2Model(nn.Module):
     def __init__(
             self,
             ut_embed_size: int, 
-            device: str,
             text_conf: Config,
             spk_conf: Config,
             img_conf: Optional[Config], 
             audio_conf: Optional[Config],            
             em_conf: Config,
+            device: str = 'cuda:0'
     ):
         super().__init__()
         self.word_embed = PretrainedEmbedding(**text_conf())

@@ -8,8 +8,8 @@ if __name__ == '__main__':
     parser = ArgumentParser(description='Textual Emotion Cause Analysis')
     parser.add_argument('--conf', type=str, default='config/subtask1.ini', help='Configuration file.')
     parser.add_argument('--path', type=str, default='results/subtask1/', help='Path to load the analyzer or store it.')
-    parser.add_argument('--load', type=bool, action='store_true', help='Wheter to load the analyzer.')
-    parser.add_argument('--batch_size', int=1500, help='Batch size.')
+    parser.add_argument('--load', action='store_true', help='Wheter to load the analyzer.')
+    parser.add_argument('--batch_size', type=int, default=1500, help='Batch size.')
     
     
     modes = parser.add_subparsers(dest='mode')
@@ -21,7 +21,6 @@ if __name__ == '__main__':
     train.add_argument('--train', type=str, default='dataset/text/Subtask_1_trainset.json', help='Path to the train set.')
     train.add_argument('--dev', type=str, default='dataset/text/Subtask_1_devset.json', help='Path to the dev set.')
     train.add_argument('--test', type=str, default='dataset/text/Subtask_1_test.json', help='Path to the test set.')
-    train.add_argument('--batch_update', type=int, default=1)
     train.add_argument('--lr', type=float, default=1e-5)
     train.add_argument('--epochs', type=int, default=100)
     train.add_argument('--patience', type=int, default=20)
@@ -34,7 +33,8 @@ if __name__ == '__main__':
     eval.add_argument('--data', type=str, help='Path to the evaluation set.')
     
     args = parser.parse_args()
-    conf = ConfigParser().read(args.conf)
+    conf = ConfigParser()
+    conf.read(args.conf)
 
     if args.load: 
         analyzer = Subtask1Analyzer.load(args.path)
@@ -46,7 +46,7 @@ if __name__ == '__main__':
         text_conf = Config.from_ini(conf['text'])
         model_conf = Config.from_ini(conf['model'])
         analyzer = Subtask1Analyzer.build(train, text_conf, **model_conf())
-        analyzer.train(train, dev, test, args.path, args.lr, args.epochs, args.batch_size, args.batch_update, args.patience) 
+        analyzer.train(train, dev, test, args.path, args.lr, args.epochs, args.batch_size, args.patience) 
     elif args.mode == 'predict':
         input = Subtask1Dataset.from_path(args.input)
         analyzer.predict(input, args.output, args.batch_size)

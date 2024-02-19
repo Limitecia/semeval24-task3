@@ -6,11 +6,11 @@ from configparser import ConfigParser
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='Textual Emotion Cause Analysis')
-    parser.add_argument('--conf', type=str, help='Configuration file.')
-    parser.add_argument('--path', type=str, help='Path to load the analyzer or store it.')
-    parser.add_argument('--load', type=bool, action='store_true', help='Wheter to load the analyzer.')
-    parser.add_argument('--batch_size', int=1500, help='Batch size.')
-    parser.add_argument('--video_folder', type=str, help='Path to stored videos and audios.')
+    parser.add_argument('--conf', type=str, default='config/subtask2.ini', help='Configuration file.')
+    parser.add_argument('--path', type=str, default='results/subtask2/', help='Path to load the analyzer or store it.')
+    parser.add_argument('--load', action='store_true', help='Wheter to load the analyzer.')
+    parser.add_argument('--batch_size', type=int, default=1500, help='Batch size.')
+    parser.add_argument('--video_folder', type=str, default='../dataset/', help='Path to stored videos and audios.')
     
     
     modes = parser.add_subparsers(dest='mode')

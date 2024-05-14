@@ -1,7 +1,7 @@
 # LyS at SemEval 2024: Multimodal Cause Emotion Extraction in Multi-Party Conversations 💁🏻‍♂️💭🙋🏻‍♀️
 
-Hi!👋 This repository contains the code developed for our proposal *"[An Early Prototype for End-to-End Emotion
-Linking as Graph-Based Parsing](https://arxiv.org/abs/2405.06483)"* for the [SemEval 2024 (Task 3)](https://nustm.github.io/SemEval-2024_ECAC/). 
+Hi!👋 This repository contains the code developed for our proposal *[An Early Prototype for End-to-End Emotion
+Linking as Graph-Based Parsing](https://arxiv.org/abs/2405.06483)* at the [SemEval 2024 (Task 3)](https://nustm.github.io/SemEval-2024_ECAC/). 
 
 ## Requirements ⚙️
 

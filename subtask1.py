@@ -35,9 +35,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     conf = ConfigParser()
     conf.read(args.conf)
-
-    # 自动选择设备
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # 自动选择设备（DataParallel 默认要求模型在 cuda:0）
+    default_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     
     if args.load: 
         analyzer = Subtask1Analyzer.load(args.path)
@@ -50,11 +50,13 @@ if __name__ == '__main__':
         model_conf = Config.from_ini(conf['model'])
         analyzer = Subtask1Analyzer.build(train_data, text_conf, **model_conf())
         
-        # 将模型移动到指定设备
-        analyzer.model.to(device)
-        # 如果检测到多个GPU，则使用DataParallel包装模型
+        # 如果检测到多块 GPU，则用 DataParallel 包装模型，并转移到默认设备 cuda:0
         if torch.cuda.device_count() > 1:
+            print(f"发现 {torch.cuda.device_count()} 块 GPU，使用 DataParallel 进行数据并行。")
             analyzer.model = torch.nn.DataParallel(analyzer.model)
+            analyzer.model.to(default_device)
+        else:
+            analyzer.model.to(default_device)
         
         analyzer.train(train_data, dev_data, test_data, args.path, args.lr, args.epochs, args.batch_size, args.patience) 
     elif args.mode == 'predict':

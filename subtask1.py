@@ -18,7 +18,7 @@ if __name__ == '__main__':
     # --load：如果设置该标志，则从指定路径加载预训练或已训练好的分析器
     parser.add_argument('--load', action='store_true', help='Wheter to load the analyzer.')
     # --batch_size：设置批次大小，默认为1500
-    parser.add_argument('--batch_size', type=int, default=1500, help='Batch size.')
+    parser.add_argument('--batch_size', type=int, default=500, help='Batch size.')
     
     # 创建子命令解析器，根据不同模式执行不同任务
     modes = parser.add_subparsers(dest='mode')
